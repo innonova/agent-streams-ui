@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@/api/client'
 import type { ChatMessage, TurnImage } from '@/api/types'
 import { useResizable } from '@/composables/useResizable'
@@ -8,12 +8,16 @@ import { windowSize } from '@/model'
 import { useAgentsStore } from '@/stores/agents'
 import { useChatStore } from '@/stores/chat'
 import { useDraftsStore } from '@/stores/drafts'
+import { useFeaturesStore } from '@/stores/features'
+import { useNotesStore } from '@/stores/notes'
 import { useNotificationsStore } from '@/stores/notifications'
 import { usePresenceStore } from '@/stores/presence'
 import { useProjectsStore } from '@/stores/projects'
 import ActivityLine from './ActivityLine.vue'
 import ChatPane from './ChatPane.vue'
+import FeaturesPanel from './FeaturesPanel.vue'
 import FlowStrip from './FlowStrip.vue'
+import NotesPanel from './NotesPanel.vue'
 import NudgeNotice from './NudgeNotice.vue'
 import ResizeHandle from './ResizeHandle.vue'
 import StateBadge from './StateBadge.vue'
@@ -28,9 +32,10 @@ import TurnInput from './TurnInput.vue'
  * chooses and where its questions and decisions stand. Either can be put
  * away; where the pane is too narrow for both they are tabs.
  *
- * Everything else about an agent's work (files, features, what changed)
- * is meant to open beside this, not instead of it, so that what is
- * looked at stays the selected agent's.
+ * The pane beside the flow is a place, and the chat is what is usually
+ * in it. The stream's features and notes open there too: beside the
+ * agent, not instead of it, so that what is looked at stays the
+ * selected agent's and the flow stays in sight while a report is read.
  */
 const props = defineProps<{ agentId: string }>()
 const emit = defineEmits<{ tree: []; gone: [] }>()
@@ -41,6 +46,9 @@ const notifications = useNotificationsStore()
 const presence = usePresenceStore()
 const projects = useProjectsStore()
 const route = useRoute()
+const router = useRouter()
+const features = useFeaturesStore()
+const notes = useNotesStore()
 
 const fail = (e: unknown) =>
   notifications.push(
@@ -83,16 +91,53 @@ const LAYOUT_KEY = 'agent-panes'
 const LAYOUT_TITLE: Record<Layout, string> = {
   flow: 'the flow alone: the chat is put away, and what the agent asks or says in it is counted here',
   both: 'the flow and the chat side by side, each with its own input',
-  chat: 'the chat alone, the flow folded to one line above it',
+  chat: 'what is beside the flow alone, the flow folded to one line above it',
 }
 const layout = ref<Layout>(LAYOUTS.find((l) => l === localStorage.getItem(LAYOUT_KEY)) ?? 'both')
 function setLayout(l: Layout) {
   layout.value = l
   localStorage.setItem(LAYOUT_KEY, l)
 }
-/** As tabs, the one in front is the pane the layout keeps: the chat, unless it was put away. */
-const firstTab = () => (layout.value === 'flow' ? 'flow' : 'chat')
-const tab = ref<'chat' | 'flow'>(firstTab())
+/** What is in the pane beside the flow: the chat, or something of the agent's stream. */
+const BESIDE = ['chat', 'features', 'notes'] as const
+type Beside = (typeof BESIDE)[number]
+const BESIDE_KEY = 'agent-beside'
+const beside = ref<Beside>(
+  // a link to a feature opens the features, whatever was there last
+  typeof route.query.feature === 'string'
+    ? 'features'
+    : (BESIDE.find((b) => b === localStorage.getItem(BESIDE_KEY)) ?? 'chat'),
+)
+function setBeside(b: Beside) {
+  beside.value = b
+  localStorage.setItem(BESIDE_KEY, b)
+  if (layout.value === 'flow') setLayout('both')
+  tab.value = 'beside'
+  // an opened feature is in the address: gone from it when the features are put away
+  if (b !== 'features' && route.query.feature !== undefined)
+    void router.replace({ query: { ...route.query, feature: undefined } })
+}
+/** As tabs, the one in front is the pane the layout keeps: the one beside the flow, unless it was put away. */
+const firstTab = () => (layout.value === 'flow' ? 'flow' : 'beside')
+const tab = ref<'beside' | 'flow'>(firstTab())
+/** What of the stream waits for a person, for the tabs: reports to read, and open notes. */
+const toRead = computed(() => {
+  const id = current.value?.agent.projectId
+  return id ? (features.byProject.get(id) ?? []).filter((f) => f.status === 'review').length : 0
+})
+const openNotes = computed(() => {
+  const id = current.value?.agent.projectId
+  return id ? (notes.byProject.get(id)?.open ?? 0) : 0
+})
+watch(
+  () => current.value?.agent.projectId,
+  (id) => {
+    if (!id) return
+    if (!features.byProject.has(id)) void features.load(id).catch(() => undefined)
+    if (!notes.byProject.has(id)) void notes.load(id).catch(() => undefined)
+  },
+  { immediate: true },
+)
 
 /** What the agent said while the chat was put away, counted on the way back to it. */
 const seenUpTo = ref(new Map<string, number>())
@@ -148,10 +193,7 @@ const chatNews = computed(() =>
         },
       ].filter((c) => c.n > 0),
 )
-function showChat() {
-  if (layout.value === 'flow') setLayout('both')
-  tab.value = 'chat'
-}
+const showChat = () => setBeside('chat')
 
 // ---- loading ---------------------------------------------------------------
 
@@ -356,6 +398,7 @@ async function say(text: string, images: TurnImage[] = []) {
 }
 function answer(m: ChatMessage) {
   replyTo.value = m
+  if (beside.value !== 'chat') setBeside('chat')
   void nextTick(() =>
     document.querySelector<HTMLTextAreaElement>('[data-test=chat-input]')?.focus(),
   )
@@ -550,8 +593,8 @@ const busy = computed(() => {
           :data-test="`panes-${l}`"
           @click="setLayout(l)"
         >
-          {{ l }}
-          <template v-if="l === 'chat'">
+          {{ l === 'chat' ? beside : l }}
+          <template v-if="l === 'chat' && beside === 'chat'">
             <span
               v-for="c in chatNews"
               :key="c.key"
@@ -642,18 +685,18 @@ const busy = computed(() => {
       data-test="pane-tabs"
     >
       <button
-        v-for="t in ['chat', 'flow'] as const"
+        v-for="t in ['chat', 'flow', 'features', 'notes'] as const"
         :key="t"
         type="button"
-        class="grow border-b-2 px-3 py-2"
+        class="grow border-b-2 px-2 py-2"
         :class="
-          tab === t
+          (t === 'flow' ? tab === 'flow' : tab === 'beside' && beside === t)
             ? 'border-blue-600 font-medium'
             : 'border-transparent text-slate-500 dark:text-slate-400'
         "
         :data-test="`pane-tab-${t}`"
-        :aria-selected="tab === t"
-        @click="tab = t"
+        :aria-selected="t === 'flow' ? tab === 'flow' : tab === 'beside' && beside === t"
+        @click="t === 'flow' ? (tab = 'flow') : setBeside(t)"
       >
         {{ t }}
         <span
@@ -661,6 +704,14 @@ const busy = computed(() => {
           class="ml-1 rounded bg-amber-100 px-1.5 text-sm text-amber-900 dark:bg-amber-900 dark:text-amber-100"
           >{{ openQuestions }} ?</span
         >
+        <span
+          v-if="t === 'features' && toRead"
+          class="ml-1 rounded bg-violet-100 px-1.5 text-sm text-violet-900 dark:bg-violet-900 dark:text-violet-100"
+          >{{ toRead }}</span
+        >
+        <span v-if="t === 'notes' && openNotes" class="ml-1 text-sm text-slate-400">{{
+          openNotes
+        }}</span>
       </button>
     </div>
     <div
@@ -705,14 +756,17 @@ const busy = computed(() => {
         ref="chatEl"
         class="min-h-0 min-w-0 flex-col border-slate-200 dark:border-slate-800"
         :class="[
-          tab === 'chat' ? 'flex' : 'hidden',
+          tab === 'beside' ? 'flex' : 'hidden',
           layout === 'flow'
             ? '@3xl:hidden'
             : layout === 'both'
               ? '@3xl:col-start-2 @3xl:row-start-1 @3xl:flex @3xl:border-l'
               : '@3xl:flex',
+          // what has no input of its own under it runs to the bottom of the screen
+          layout === 'both' && beside !== 'chat' ? '@3xl:row-span-3' : '',
         ]"
-        data-test="chat-pane"
+        :data-test="beside === 'chat' ? 'chat-pane' : 'beside-pane'"
+        :data-beside="beside"
       >
         <div v-if="layout === 'chat'" class="hidden shrink-0 @3xl:block">
           <FlowStrip
@@ -722,7 +776,59 @@ const busy = computed(() => {
             @open="setLayout('both')"
           />
         </div>
+        <!-- what is in this pane: chosen here where there is room for two panes, in the tabs above otherwise -->
+        <div
+          class="hidden shrink-0 items-center gap-1 border-b border-slate-200 px-2 text-sm @3xl:flex dark:border-slate-800"
+          role="tablist"
+          aria-label="beside the flow"
+          data-test="beside-tabs"
+        >
+          <button
+            v-for="b in BESIDE"
+            :key="b"
+            type="button"
+            role="tab"
+            class="-mb-px border-b-2 px-2 py-1.5"
+            :class="
+              beside === b
+                ? 'border-blue-600 font-medium text-slate-900 dark:text-slate-100'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+            "
+            :aria-selected="beside === b"
+            :data-test="`beside-${b}`"
+            @click="setBeside(b)"
+          >
+            {{ b }}
+            <span
+              v-if="b === 'chat' && openQuestions"
+              class="ml-0.5 rounded bg-amber-100 px-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100"
+              data-test="beside-chat-questions"
+              >{{ openQuestions }} ?</span
+            >
+            <span
+              v-if="b === 'features' && toRead"
+              class="ml-0.5 rounded bg-violet-100 px-1 text-xs text-violet-900 dark:bg-violet-900 dark:text-violet-100"
+              title="reports for you to read"
+              data-test="beside-features-count"
+              >{{ toRead }}</span
+            >
+            <span
+              v-if="b === 'notes' && openNotes"
+              class="ml-0.5 text-xs text-slate-400"
+              title="open notes"
+              data-test="beside-notes-count"
+              >{{ openNotes }}</span
+            >
+          </button>
+          <span class="grow" />
+          <span class="truncate text-xs text-slate-400 dark:text-slate-500">{{
+            beside === 'chat' ? `with ${current.agent.name}` : `of ${project?.name ?? ''}`
+          }}</span>
+        </div>
+        <FeaturesPanel v-if="beside === 'features'" :project-id="current.agent.projectId" />
+        <NotesPanel v-else-if="beside === 'notes'" :project-id="current.agent.projectId" />
         <ChatPane
+          v-else
           :messages="messages"
           :has-earlier="chat.earlier.has(agentId)"
           :loading-earlier="chat.loadingEarlier.has(agentId)"
@@ -769,7 +875,9 @@ const busy = computed(() => {
       <!-- an input under each pane, and what is written goes to the pane above it -->
       <div
         class="relative grid min-w-0 grid-cols-1"
-        :class="layout === 'both' ? '@3xl:col-span-2 @3xl:grid-cols-subgrid' : ''"
+        :class="
+          layout === 'both' && beside === 'chat' ? '@3xl:col-span-2 @3xl:grid-cols-subgrid' : ''
+        "
         data-test="composer"
       >
         <!-- typing floats right above the inputs, without moving anything -->
@@ -812,9 +920,10 @@ const busy = computed(() => {
           </div>
         </div>
         <div
+          v-if="beside === 'chat'"
           class="min-w-0 border-slate-200 dark:border-slate-800"
           :class="[
-            tab === 'chat' ? 'block' : 'hidden',
+            tab === 'beside' ? 'block' : 'hidden',
             layout === 'flow'
               ? '@3xl:hidden'
               : layout === 'both'
@@ -822,6 +931,7 @@ const busy = computed(() => {
                 : '@3xl:block',
           ]"
         >
+          <!-- the chat's input belongs to the chat: features and notes have their own ways to write -->
           <!-- beside the flow's input, that one's stop is the one -->
           <TurnInput
             ref="chatInput"

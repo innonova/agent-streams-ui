@@ -88,6 +88,36 @@ agent's, so what everything on screen is about stays in sight.
 What is done to an agent rather than said to it (restart, compact, end
 session, archive) is behind one "⋯": none of it is the work.
 
+## Beside the flow
+
+The pane beside the flow is a place, and the chat is what is usually in
+it. The stream's **features** and **notes** open there too, chosen by a
+small row of tabs at the top of that pane (and among the pane tabs
+where there is room for one pane only), each with a count of what waits
+for a person: open questions, reports to read, open notes.
+
+This is the answer to "the other views lose their grounding": a report
+is read, answered and closed with the agent that wrote it still
+selected, its name in the header and its flow to the left, and the flow
+keeps its input, so "do it again, but…" is typed without leaving. What
+has no input of its own under it (features, notes) runs to the bottom
+of the screen; the chat's input comes and goes with the chat.
+
+- **Features**: the list first, in the order that matters to a person
+  (for you to read, in progress, blocked, planned; done is counted and
+  shown when asked for), each row saying where it stands by its latest
+  report or response. One feature opened takes the pane, with what a
+  person does to it (done, block, reopen, edit, respond) at the top and
+  bottom, and is in the address (`?feature=<slug>`), so a reload or a
+  link comes back to it. There is deliberately no button that sends
+  the feature to the agent: asking is typed, in the flow beside it.
+- **Notes**: the add box first and always, the open ones as a
+  checklist, the done ones folded. The box empties the moment a note
+  is sent, so what is typed next is the next note.
+- What the pane last held is remembered per browser.
+
+Files and changes are not there yet; when they come, this is where.
+
 ## Carried over unchanged
 
 From `agent-manager-ui`, copied and not rewritten, because they hold
@@ -104,7 +134,7 @@ palette, and the reload on a stale chunk after a deploy.
 Each of these exists in the current UI and is reached there through the
 "current UI" link until it has been considered here:
 
-- files, features, changes, notes;
+- files and changes;
 - editing an agent, deleting one, its statistics, its harness note,
   account usage;
 - a stream's own page: its purpose, its clones and what is not landed;

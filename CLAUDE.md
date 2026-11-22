@@ -26,6 +26,8 @@ than instead of it.
 - **Look at the screen.** A change to what is shown is looked at in a
   browser, at desktop, low and phone sizes, before it is called done; a
   green suite over a screen nobody looked at is not a finished change.
+  `e2e/look.spec.ts` fills a test manager with streams, groups, agents
+  in every state, features and notes, and writes the screenshots.
   Tests of layout measure geometry (`e2e/work.spec.ts` does).
 - **The copied parts stay copies.** `TranscriptView`, `TranscriptItem`,
   `ToolCallItem`, `ActivityLine`, `ChatPane`, `TurnInput` and the
@@ -46,6 +48,7 @@ npx vue-tsc --noEmit -p tsconfig.app.json
 npx vitest run
 npm run lint && npm run format
 npx playwright test    # starts its own daemon and manager on 4298 and Vite on 5174
+LOOK=1 npx playwright test e2e/look.spec.ts   # not a test: screenshots of a filled-in screen in /tmp/look/
 npm run build          # dist/, with base /next/
 ```
 
