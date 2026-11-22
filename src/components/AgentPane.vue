@@ -29,6 +29,7 @@ import ResizeHandle from './ResizeHandle.vue'
 import StateBadge from './StateBadge.vue'
 import TranscriptView from './TranscriptView.vue'
 import TurnInput from './TurnInput.vue'
+import UsageChip from './UsageChip.vue'
 
 /**
  * One agent: who it is in a line, then the two records of working with
@@ -629,6 +630,13 @@ const busy = computed(() => {
         data-test="agent-context"
         >ctx {{ context.percent }}% of {{ context.size }}</span
       >
+      <!-- the account's limits, quietly: tinted only when one is near -->
+      <UsageChip
+        v-if="current.status.usage"
+        :usage="current.status.usage"
+        no-context
+        class="hidden @4xl:inline"
+      />
       <span
         v-if="current.status.error"
         class="min-w-0 truncate text-sm text-red-700 dark:text-red-300"
