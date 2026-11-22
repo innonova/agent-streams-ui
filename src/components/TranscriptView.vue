@@ -1,0 +1,235 @@
+<script setup lang="ts">
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import type { Item, StoredItem } from '@/api/types'
+import ToolCallItem from './ToolCallItem.vue'
+import TranscriptItem from './TranscriptItem.vue'
+
+const props = defineProps<{
+  items: StoredItem[]
+  /** Older history exists that is not loaded. */
+  hasEarlier?: boolean
+  loadingEarlier?: boolean
+  /** The activity overlay's current height, so the "latest" button shifts up clear of it. */
+  activityHeight?: number
+  /** An item index to scroll to and highlight (a link from the changes tab); null to leave the view at the end. */
+  scrollTo?: number | null
+  /** The last message sent, by index, and whether it can be taken back (null) or why not. */
+  withdrawIndex?: number | null
+  withdraw?: { reason: string | null; title: string; busy: boolean }
+}>()
+const emit = defineEmits<{
+  decide: [requestId: string, option: string]
+  loadEarlier: []
+  withdraw: []
+}>()
+
+type ToolUse = Extract<Item, { kind: 'tool_use' }>
+type ToolResult = Extract<Item, { kind: 'tool_result' }>
+type Row =
+  | { key: number; kind: 'item'; item: Item; at: number }
+  | { key: number; kind: 'tool'; call: ToolUse; result: ToolResult | null }
+
+/**
+ * A tool call and its result render as one collapsed line, so the result
+ * is folded under the call that produced it rather than listed after it.
+ * Results whose call is not in the transcript stay as plain items.
+ */
+/**
+ * Indexes of items a withdrawal folds away: from each marker's
+ * `withdrawnFrom` up to the marker. That is what it took out of the
+ * agent's context, and the lines of the taking back itself (the stop, the
+ * session ended and resumed): one click leaves one line, the marker.
+ */
+const withdrawn = computed(() => {
+  const out = new Set<number>()
+  for (const s of props.items) {
+    const it = s?.item // the array can have holes while history is paged in
+    if (!it || it.kind !== 'system' || it.withdrawnFrom === undefined) continue
+    for (const t of props.items)
+      if (t && t.index >= it.withdrawnFrom && t.index < s.index) out.add(t.index)
+  }
+  return out
+})
+/** Withdrawn items shown on request, by index; a marker's toggle flips its whole range. */
+const shown = ref(new Set<number>())
+function toggleWithdrawn(from: number, marker: number) {
+  const next = new Set(shown.value)
+  const on = !next.has(from)
+  for (const t of props.items)
+    if (t && t.index >= from && t.index < marker) {
+      if (on) next.add(t.index)
+      else next.delete(t.index)
+    }
+  shown.value = next
+}
+const rows = computed<Row[]>(() => {
+  const out: Row[] = []
+  const calls = new Map<string, Row & { kind: 'tool' }>()
+  for (const s of props.items) {
+    if (!s) continue // a hole: history not loaded
+    const it = s.item
+    if (it.kind === 'tool_use') {
+      const row: Row & { kind: 'tool' } = { key: s.index, kind: 'tool', call: it, result: null }
+      calls.set(it.id, row)
+      out.push(row)
+    } else if (it.kind === 'tool_result' && calls.has(it.toolUseId)) {
+      const row = calls.get(it.toolUseId)!
+      if (!row.result) row.result = it
+      else out.push({ key: s.index, kind: 'item', item: it, at: s.at }) // a second result for the same call
+    } else {
+      out.push({ key: s.index, kind: 'item', item: it, at: s.at })
+    }
+  }
+  return out
+})
+const el = ref<HTMLElement | null>(null)
+const following = ref(true)
+
+function onScroll() {
+  const e = el.value
+  if (!e) return
+  following.value = e.scrollHeight - e.scrollTop - e.clientHeight < 40
+  if (e.scrollTop < 200 && props.hasEarlier && !props.loadingEarlier) emit('loadEarlier')
+}
+
+/**
+ * Earlier history is prepended; keep what the reader is looking at in
+ * place by growing the scroll offset by what the new rows added above.
+ */
+watch(
+  () => rows.value[0]?.key,
+  async (first, was) => {
+    const e = el.value
+    if (!e || first === undefined || was === undefined || first >= was) return
+    const height = e.scrollHeight
+    const top = e.scrollTop
+    await nextTick()
+    e.scrollTop = top + (e.scrollHeight - height)
+  },
+)
+
+async function follow() {
+  if (!following.value) return
+  await nextTick()
+  const e = el.value
+  if (e) e.scrollTop = e.scrollHeight
+}
+
+/** The scroll target already honoured, so a re-render does not keep yanking to it. */
+const highlighted = ref(-1)
+async function goToTarget(): Promise<void> {
+  const target = props.scrollTo
+  if (target == null) {
+    highlighted.value = -1 // cleared: the same place asked for again is a new request
+    return
+  }
+  if (target === highlighted.value) return
+  await nextTick()
+  const e = el.value
+  const row = e?.querySelector<HTMLElement>(`[data-index="${target}"]`)
+  if (!e || !row) return // not rendered yet (still paging in); a later items change retries
+  following.value = false // hold at the target, not the bottom
+  row.scrollIntoView({ block: 'center' })
+  row.classList.add('ring-2', 'ring-blue-400', 'rounded')
+  window.setTimeout(() => row.classList.remove('ring-2', 'ring-blue-400', 'rounded'), 2000)
+  highlighted.value = target
+}
+watch(() => props.scrollTo, goToTarget)
+
+watch(
+  () => props.items,
+  () => {
+    // arriving with a scroll target: go to it, do not force the view to the end
+    if (props.scrollTo != null && props.scrollTo !== highlighted.value) {
+      void goToTarget()
+      return
+    }
+    following.value = true // a different transcript starts at its end
+    void follow()
+  },
+)
+watch(() => props.items.length, follow)
+watch(() => props.items[props.items.length - 1]?.item, follow, { deep: true })
+// the activity overlay floats over the bottom: the scroller reserves its
+// height below the items, so the newest item scrolls up clear of it, and
+// a view that was at the end stays at the end as the reservation changes
+watch(() => props.activityHeight, follow)
+onMounted(follow)
+</script>
+
+<template>
+  <div
+    ref="el"
+    class="h-full overflow-y-auto px-4 py-3"
+    :style="activityHeight ? { paddingBottom: `calc(0.75rem + ${activityHeight}px)` } : undefined"
+    data-test="transcript"
+    @scroll="onScroll"
+  >
+    <div class="mx-auto flex max-w-3xl flex-col gap-3">
+      <button
+        v-if="hasEarlier"
+        class="self-center rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        data-test="load-earlier"
+        :disabled="loadingEarlier"
+        @click="emit('loadEarlier')"
+      >
+        {{ loadingEarlier ? 'loading earlier…' : 'load earlier' }}
+      </button>
+      <template v-for="r in rows" :key="r.key">
+        <!-- withdrawn: out of the agent's context and out of the way here; the marker line shows them on request -->
+        <template v-if="!withdrawn.has(r.key) || shown.has(r.key)">
+          <div
+            :class="withdrawn.has(r.key) ? 'opacity-40' : ''"
+            :title="
+              withdrawn.has(r.key) ? 'withdrawn: no longer in the agent\'s context' : undefined
+            "
+            :data-withdrawn="withdrawn.has(r.key) ? 'true' : undefined"
+          >
+            <ToolCallItem
+              v-if="r.kind === 'tool'"
+              :call="r.call"
+              :result="r.result"
+              :data-index="r.key"
+            />
+            <template v-else-if="r.item.kind === 'system' && r.item.withdrawnFrom !== undefined">
+              <div
+                class="text-sm text-slate-400 dark:text-slate-500"
+                data-item="system"
+                :data-index="r.key"
+              >
+                {{ r.item.text }}
+                <button
+                  class="ml-2 hover:underline"
+                  data-test="withdrawn-toggle"
+                  @click="toggleWithdrawn(r.item.withdrawnFrom, r.key)"
+                >
+                  {{ shown.has(r.item.withdrawnFrom) ? 'hide' : 'show' }}
+                </button>
+              </div>
+            </template>
+            <TranscriptItem
+              v-else
+              :item="r.item"
+              :at="r.at"
+              :data-index="r.key"
+              :withdraw="r.key === withdrawIndex ? withdraw : undefined"
+              @decide="(id, o) => emit('decide', id, o)"
+              @withdraw="emit('withdraw')"
+            />
+          </div>
+        </template>
+      </template>
+      <p v-if="rows.length === 0" class="text-base text-slate-400 dark:text-slate-500">
+        No transcript yet.
+      </p>
+    </div>
+  </div>
+  <button
+    v-if="!following"
+    class="absolute right-6 bottom-24 rounded-full bg-slate-800 px-3 py-1 text-sm text-white shadow"
+    :style="activityHeight ? { bottom: `calc(6rem + ${activityHeight}px)` } : undefined"
+    @click="((following = true), follow())"
+  >
+    ↓ latest
+  </button>
+</template>
