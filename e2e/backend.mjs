@@ -57,6 +57,13 @@ fs.writeFileSync(
 fs.mkdirSync(path.join(E2E_ROOT, 'ui'), { recursive: true })
 fs.writeFileSync(path.join(E2E_ROOT, 'ui', 'index.html'), '<html></html>')
 fs.writeFileSync(path.join(E2E_ROOT, 'ui', 'build.json'), JSON.stringify({ id: 'e2e-build-1' }))
+// this UI's own build, as the manager would serve it under /next/ (pages come from Vite; this is for build.json)
+fs.mkdirSync(path.join(E2E_ROOT, 'ui-next'), { recursive: true })
+fs.writeFileSync(path.join(E2E_ROOT, 'ui-next', 'index.html'), '<html></html>')
+fs.writeFileSync(
+  path.join(E2E_ROOT, 'ui-next', 'build.json'),
+  JSON.stringify({ id: 'e2e-next-build-1' }),
+)
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
 
@@ -98,6 +105,7 @@ const manager = spawn(process.execPath, [MANAGER_MAIN], {
     AGENT_MANAGER_ADMIN_PASSWORD: ADMIN_PASSWORD,
     AGENT_MANAGER_LOGIN_ATTEMPTS_PER_MINUTE: '1000', // every test logs in; the throttle is for the real thing
     AGENT_MANAGER_UI_DIR: path.join(E2E_ROOT, 'ui'), // pages come from Vite; this is only for build.json
+    AGENT_MANAGER_UI_NEXT_DIR: path.join(E2E_ROOT, 'ui-next'),
     AGENT_MANAGER_EVENTS_PING_MS: '500',
     AGENT_MANAGER_HARNESS_FILE: path.join(E2E_ROOT, 'harness.md'), // never the developer's own ~/.config files
     AGENT_MANAGER_MODELS_FILE: path.join(E2E_ROOT, 'models.md'),

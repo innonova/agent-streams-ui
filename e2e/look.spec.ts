@@ -1,3 +1,5 @@
+/* eslint-disable playwright/no-skipped-test, playwright/expect-expect, playwright/no-wait-for-timeout --
+   not a test: it takes pictures */
 import fs from 'node:fs'
 import path from 'node:path'
 import { devices, expect, request, test, type Page } from '@playwright/test'

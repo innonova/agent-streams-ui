@@ -266,9 +266,13 @@ export type EventFrame =
       daemon: { connected: boolean }
       presence?: Record<string, PresenceUser[]>
       uiBuild?: string | null
+      /** The build of this UI the manager serves under /next/; null when it serves none. */
+      uiNextBuild?: string | null
       hosts?: HostStatus[]
     }
   | { type: 'ui.build'; id: string | null }
+  /** The same for this UI, the one served under /next/: its own deploys, announced apart from the first UI's. */
+  | { type: 'ui-next.build'; id: string | null }
   | { type: 'hosts'; hosts: HostStatus[] }
   | { type: 'host.reconnected'; name: string }
   | { type: 'daemon'; connected: boolean }

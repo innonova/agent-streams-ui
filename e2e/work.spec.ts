@@ -1,4 +1,7 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { devices, expect, test } from '@playwright/test'
+import { E2E_ROOT } from './constants'
 import { agent, login, pageOverflow, stream } from './helpers'
 
 /**
@@ -18,8 +21,10 @@ test('a stream is started in a group, given an agent, and worked with, all on on
   await page.getByTestId('new-stream-group').fill('house')
   await page.getByTestId('form-submit').click()
   // the next thing to do with it is an agent, so that form is already open
-  await page.getByTestId('new-agent-name').fill('sorter')
-  await page.getByTestId('new-agent-profile').selectOption('fake')
+  await page.getByTestId('agent-name').fill('sorter')
+  await page.getByTestId('agent-profile').selectOption('fake')
+  await page.getByTestId('agent-permissions').selectOption('ask')
+  await page.getByTestId('agent-nudge').check()
   await page.getByTestId('form-submit').click()
 
   // one screen: the agent beside the tree, its stream in its title, no bar above
@@ -51,9 +56,33 @@ test('a stream is started in a group, given an agent, and worked with, all on on
   await page.getByTestId('chat-input').press('Control+Enter')
   await expect(page.getByTestId('chat-pane')).toContainText('and one for the chat')
 
+  // what is done to the agent rather than said to it is behind one button
+  await page.getByTestId('agent-menu').click()
+  await page.getByTestId('agent-edit').click()
+  await expect(page.getByTestId('agent-permissions')).toHaveValue('ask') // as it was made
+  await expect(page.getByTestId('agent-nudge')).toBeChecked()
+  await page.getByTestId('agent-name').fill('sorter-two')
+  await page.getByTestId('agent-model').fill('fake-large')
+  await page.getByTestId('form-submit').click()
+  await expect(page.getByTestId('agent-title')).toHaveText(/spring-clean\s*›\s*sorter-two/)
+  await expect(group.getByTestId('agent-row')).toContainText('sorter-two')
+  await page.getByTestId('agent-menu').click()
+  await page.getByTestId('agent-stats').click()
+  await expect(page.getByTestId('stats-dialog')).toContainText('sorter-two')
+  await expect(page.getByTestId('stats')).toContainText('Runtime') // the figures, once fetched
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('stats-dialog')).toHaveCount(0)
+
   // a reload comes back to the agent that was open
   await page.goto('./')
-  await expect(page.getByTestId('agent-title')).toHaveText(/spring-clean\s*›\s*sorter/)
+  await expect(page.getByTestId('agent-title')).toHaveText(/spring-clean\s*›\s*sorter-two/)
+
+  // deleted for good: off the tree, and the screen back to nobody
+  page.once('dialog', (d) => void d.accept())
+  await page.getByTestId('agent-menu').click()
+  await page.getByTestId('agent-delete').click()
+  await expect(page.getByTestId('empty')).toBeVisible()
+  await expect(group.getByTestId('agent-row')).toHaveCount(0)
 })
 
 test('the tree: groups, what a folded row says, moving a stream, finding one', async ({ page }) => {
@@ -106,6 +135,42 @@ test('the tree: groups, what a folded row says, moving a stream, finding one', a
   await expect(page.getByTestId('agent-row')).toContainText('asker')
   await page.getByTestId('tree-filter').fill('nothing-like-this')
   await expect(page.getByTestId('work-tree')).toContainText('nothing by that name')
+})
+
+test('a newer build of this UI is offered for a reload; a deploy of the other UI is not', async ({
+  page,
+}) => {
+  await login(page)
+  await expect(page.getByTestId('user')).toHaveText('admin')
+  await expect(page.getByTestId('update-available')).toHaveCount(0)
+  // the UI at / is deployed: none of this page's business
+  fs.writeFileSync(
+    path.join(E2E_ROOT, 'ui', 'build.json'),
+    JSON.stringify({ id: `other-${Date.now()}` }),
+  )
+  // eslint-disable-next-line playwright/no-wait-for-timeout -- waiting for something not to happen
+  await page.waitForTimeout(1500) // three of the manager's ticks
+  await expect(page.getByTestId('update-available')).toHaveCount(0)
+  // this one is
+  fs.writeFileSync(
+    path.join(E2E_ROOT, 'ui-next', 'build.json'),
+    JSON.stringify({ id: `next-${Date.now()}` }),
+  )
+  await expect(page.getByTestId('update-available')).toBeVisible()
+  // the settings are under the tree: text size, theme, notifications
+  await page.getByTestId('settings').click()
+  const size = await page.getByTestId('font-size').textContent()
+  await page.getByTestId('font-larger').click()
+  await expect(page.getByTestId('font-size')).not.toHaveText(size!)
+  await page.getByTestId('font-smaller').click()
+  await page.getByTestId('theme-light').click()
+  await expect(page.locator('html')).not.toHaveClass(/dark/)
+  await page.getByTestId('theme-dark').click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  // the menu opens upwards and stays on the screen
+  const menu = (await page.getByTestId('settings-menu').boundingBox())!
+  expect(menu.y).toBeGreaterThanOrEqual(0)
+  expect(menu.y + menu.height).toBeLessThanOrEqual(page.viewportSize()!.height)
 })
 
 test.describe('on a phone', () => {

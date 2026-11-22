@@ -2,18 +2,20 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ApiError, api } from '@/api/client'
-import type { Profile } from '@/api/types'
+import type { Agent } from '@/api/types'
+import AgentForm from '@/components/AgentForm.vue'
 import AgentPane from '@/components/AgentPane.vue'
 import ModalForm from '@/components/ModalForm.vue'
 import ResizeHandle from '@/components/ResizeHandle.vue'
+import SettingsMenu from '@/components/SettingsMenu.vue'
 import WorkTree from '@/components/WorkTree.vue'
 import { useResizable } from '@/composables/useResizable'
 import { useAgentsStore } from '@/stores/agents'
 import { useAttentionStore } from '@/stores/attention'
 import { useNotificationsStore } from '@/stores/notifications'
-import { usePreferencesStore } from '@/stores/preferences'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionStore } from '@/stores/session'
+import { useUpdateStore } from '@/stores/update'
 import { groupNames } from '@/tree'
 
 /**
@@ -31,7 +33,7 @@ const router = useRouter()
 const agents = useAgentsStore()
 const projects = useProjectsStore()
 const session = useSessionStore()
-const preferences = usePreferencesStore()
+const update = useUpdateStore()
 const notifications = useNotificationsStore()
 useAttentionStore() // the title and the favicon count what waits, whatever is on screen
 
@@ -82,10 +84,6 @@ function leaveAgent() {
 
 // ---- the application's own few things, under the tree ------------------------
 
-const THEMES = ['system', 'light', 'dark'] as const
-function nextTheme() {
-  preferences.setTheme(THEMES[(THEMES.indexOf(preferences.theme) + 1) % THEMES.length]!)
-}
 async function logout() {
   await session.logout()
   await router.push({ name: 'login' })
@@ -94,37 +92,14 @@ async function logout() {
 // ---- a new agent ---------------------------------------------------------------
 
 const newAgentIn = ref<string | null>(null)
-const profiles = ref<Profile[]>([])
-const agentForm = ref({ name: '', profile: '', model: '' })
 const formError = ref<string | null>(null)
 const formBusy = ref(false)
-async function openNewAgent(projectId: string) {
-  const project = projects.byId.get(projectId)?.project
-  formError.value = null
-  agentForm.value = { name: '', profile: project?.defaultProfile ?? '', model: '' }
+function openNewAgent(projectId: string) {
   newAgentIn.value = projectId
-  profiles.value = (
-    await api.profiles(project?.host).catch(() => ({ profiles: [] as Profile[] }))
-  ).profiles.filter((p) => p.supported)
-  if (!agentForm.value.profile) agentForm.value.profile = profiles.value[0]?.name ?? ''
 }
-async function createAgent() {
-  if (!newAgentIn.value) return
-  formBusy.value = true
-  formError.value = null
-  try {
-    const agent = await agents.create(newAgentIn.value, {
-      name: agentForm.value.name.trim(),
-      profile: agentForm.value.profile || undefined,
-      model: agentForm.value.model.trim() || undefined,
-    })
-    newAgentIn.value = null
-    await router.push({ name: 'agent', params: { agentId: agent.id } })
-  } catch (e) {
-    formError.value = e instanceof ApiError ? e.message : String(e)
-  } finally {
-    formBusy.value = false
-  }
+async function agentMade(agent: Agent) {
+  newAgentIn.value = null
+  await router.push({ name: 'agent', params: { agentId: agent.id } })
 }
 
 // ---- a new stream --------------------------------------------------------------
@@ -150,7 +125,7 @@ async function createStream() {
     const open = new Set<string>(JSON.parse(localStorage.getItem('tree-open') ?? '[]') as string[])
     open.add(stream.id)
     localStorage.setItem('tree-open', JSON.stringify([...open]))
-    await openNewAgent(stream.id)
+    openNewAgent(stream.id)
   } catch (e) {
     formError.value = e instanceof ApiError ? e.message : String(e)
   } finally {
@@ -194,17 +169,19 @@ const field =
           data-test="daemon-down"
           >daemon unreachable</span
         >
+        <button
+          v-if="update.available"
+          type="button"
+          class="rounded bg-blue-600 px-1.5 text-white hover:bg-blue-700"
+          title="A newer version of this page is available"
+          data-test="update-available"
+          @click="update.reload()"
+        >
+          update · reload
+        </button>
         <span class="truncate" data-test="user">{{ session.user?.name }}</span>
         <span class="grow" />
-        <button
-          type="button"
-          class="hover:text-slate-900 dark:hover:text-slate-100"
-          title="colour theme: as the system, light, dark"
-          data-test="theme"
-          @click="nextTheme"
-        >
-          {{ preferences.theme }}
-        </button>
+        <SettingsMenu />
         <a
           href="/"
           class="hover:text-slate-900 dark:hover:text-slate-100"
@@ -251,43 +228,12 @@ const field =
       </div>
     </main>
 
-    <ModalForm
+    <AgentForm
       v-if="newAgentIn"
-      :title="`New agent in ${projects.byId.get(newAgentIn)?.project.name ?? ''}`"
-      :error="formError"
-      :busy="formBusy"
+      :project-id="newAgentIn"
       @close="newAgentIn = null"
-      @submit="createAgent"
-    >
-      <label class="block text-base">
-        <span class="mb-1 block text-slate-600 dark:text-slate-300">Name</span>
-        <input
-          v-model="agentForm.name"
-          required
-          autofocus
-          :class="field"
-          data-test="new-agent-name"
-        />
-      </label>
-      <label class="block text-base">
-        <span class="mb-1 block text-slate-600 dark:text-slate-300">Profile</span>
-        <select v-model="agentForm.profile" :class="field" data-test="new-agent-profile">
-          <option v-for="p in profiles" :key="p.name" :value="p.name">{{ p.name }}</option>
-        </select>
-      </label>
-      <label class="block text-base">
-        <span class="mb-1 block text-slate-600 dark:text-slate-300">Model</span>
-        <input
-          v-model="agentForm.model"
-          placeholder="the profile's default"
-          :class="field"
-          data-test="new-agent-model"
-        />
-        <span class="mt-1 block text-sm text-slate-500 dark:text-slate-400"
-          >For Claude, a name ending in [1m] asks for the 1M context window.</span
-        >
-      </label>
-    </ModalForm>
+      @done="agentMade"
+    />
 
     <ModalForm
       v-if="newStream"

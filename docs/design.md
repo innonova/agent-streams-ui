@@ -131,22 +131,35 @@ palette, and the reload on a stale chunk after a deploy.
 
 ## Not here, and not decided
 
-Each of these exists in the current UI and is reached there through the
-"current UI" link until it has been considered here:
+Each of these exists in the current UI and is reached there (the
+"current UI" link under the tree, and two links in the settings) until
+it has been considered here:
 
 - files and changes;
-- editing an agent, deleting one, its statistics, its harness note,
-  account usage;
 - a stream's own page: its purpose, its clones and what is not landed;
+- an agent's harness note, account usage;
 - users, machines, the harness, models, method and framing texts, the
   learnings log;
-- settings beyond the theme (font size, notifications, push to a
-  phone), the installable app and its service worker;
-- the "update available" badge (a deploy is picked up by the reload on
-  a stale chunk, or by reloading).
+- creating or editing a project of the old kind (a list of
+  repositories);
+- the installable app: there is one service worker for the origin, the
+  current UI's, so push to a phone is turned on from either UI and a
+  push that is tapped opens the current UI.
 
 When one comes back it opens beside the selected agent, not instead of
 it.
+
+## The application's own things
+
+Under the tree, in one line: the connection state when it is not fine,
+an "update · reload" button when the manager serves a newer build of
+this UI (announced as `ui-next.build`, apart from the other UI's
+deploys), who is logged in, the settings (theme, text size, desktop
+notifications, push), the way back to the current UI, and logging out.
+
+What is done to an agent is behind the "⋯" in its header: edit (one
+form for a new agent and an existing one), statistics, restart,
+compact, end session, archive, delete.
 
 ## Served how
 

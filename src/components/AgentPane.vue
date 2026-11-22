@@ -2,7 +2,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@/api/client'
-import type { ChatMessage, TurnImage } from '@/api/types'
+import type { AgentStats, ChatMessage, TurnImage } from '@/api/types'
 import { useResizable } from '@/composables/useResizable'
 import { windowSize } from '@/model'
 import { useAgentsStore } from '@/stores/agents'
@@ -14,6 +14,8 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { usePresenceStore } from '@/stores/presence'
 import { useProjectsStore } from '@/stores/projects'
 import ActivityLine from './ActivityLine.vue'
+import AgentForm from './AgentForm.vue'
+import AgentStatsDialog from './AgentStatsDialog.vue'
 import ChatPane from './ChatPane.vue'
 import FeaturesPanel from './FeaturesPanel.vue'
 import FlowStrip from './FlowStrip.vue'
@@ -472,9 +474,42 @@ watch(menu, (open) => {
   else document.removeEventListener('click', closeMenu, true)
 })
 onUnmounted(() => document.removeEventListener('click', closeMenu, true))
-async function act(what: 'restart' | 'compact' | 'end' | 'archive') {
+const editing = ref(false)
+/** The agent's statistics, fetched when asked for: reading a long transcript takes a moment. */
+const stats = ref<{ data: AgentStats | null; error: string | null } | null>(null)
+let statsAsked = 0
+async function showStats() {
+  menu.value = false
+  stats.value = { data: null, error: null }
+  // closed before the answer came, or asked again: this answer is nobody's
+  const asked = ++statsAsked
+  const still = () => asked === statsAsked && stats.value !== null
+  try {
+    const data = await api.stats(props.agentId)
+    if (still()) stats.value = { data, error: null }
+  } catch (e) {
+    if (still()) stats.value = { data: null, error: e instanceof ApiError ? e.message : String(e) }
+  }
+}
+function closeStats() {
+  statsAsked++
+  stats.value = null
+}
+async function act(what: 'restart' | 'compact' | 'end' | 'archive' | 'delete') {
   menu.value = false
   const id = props.agentId
+  if (what === 'delete') {
+    if (
+      !confirm(
+        "Delete this agent for good? Its process ends and the daemon's logs and the cached transcript are removed; the vendor's own conversation store stays.",
+      )
+    )
+      return
+    return agents
+      .remove(id)
+      .then(() => emit('gone'))
+      .catch(fail)
+  }
   if (what === 'restart') return api.restart(id).catch(fail)
   if (what === 'end') return api.stop(id).catch(fail)
   if (what === 'compact') {
@@ -542,7 +577,7 @@ const busy = computed(() => {
       <span
         v-if="current.status.model ?? current.agent.model"
         class="hidden font-mono text-sm text-slate-500 @2xl:inline dark:text-slate-400"
-        data-test="agent-model"
+        data-test="header-model"
         >{{ current.status.model ?? current.agent.model }}</span
       >
       <span
@@ -613,7 +648,7 @@ const busy = computed(() => {
           class="rounded border border-slate-300 px-2 py-0.5 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           aria-haspopup="menu"
           :aria-expanded="menu"
-          title="restart, compact, end the session, archive"
+          title="edit, statistics, restart, compact, end the session, archive, delete"
           data-test="agent-menu"
           @click="menu = !menu"
         >
@@ -625,6 +660,31 @@ const busy = computed(() => {
           role="menu"
           data-test="agent-menu-items"
         >
+          <button
+            type="button"
+            role="menuitem"
+            class="block w-full px-3 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800"
+            data-test="agent-edit"
+            @click="((menu = false), (editing = true))"
+          >
+            edit…
+            <span class="block text-xs text-slate-500 dark:text-slate-400"
+              >name, model, effort, permissions, asking it to go on</span
+            >
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="block w-full px-3 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-800"
+            data-test="agent-stats"
+            @click="showStats"
+          >
+            statistics…
+            <span class="block text-xs text-slate-500 dark:text-slate-400"
+              >runtime, tokens and cost, how much went on unattended</span
+            >
+          </button>
+          <div class="my-1 border-t border-slate-200 dark:border-slate-700" />
           <button
             type="button"
             role="menuitem"
@@ -674,6 +734,18 @@ const busy = computed(() => {
             archive
             <span class="block text-xs text-slate-500 dark:text-slate-400"
               >off the tree, everything kept</span
+            >
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-slate-100 dark:text-red-300 dark:hover:bg-slate-800"
+            data-test="agent-delete"
+            @click="act('delete')"
+          >
+            delete…
+            <span class="block text-xs text-slate-500 dark:text-slate-400"
+              >for good: its process, logs and transcript</span
             >
           </button>
         </div>
@@ -950,5 +1022,20 @@ const busy = computed(() => {
         </div>
       </div>
     </div>
+    <AgentForm
+      v-if="editing"
+      :project-id="current.agent.projectId"
+      :agent="current.agent"
+      :state="current.status.state"
+      @close="editing = false"
+      @done="editing = false"
+    />
+    <AgentStatsDialog
+      v-if="stats"
+      :name="current.agent.name"
+      :stats="stats.data"
+      :error="stats.error"
+      @close="closeStats"
+    />
   </section>
 </template>
