@@ -63,20 +63,29 @@ const clones = ref<Clone[]>([])
 const registry = ref<Repository[]>([])
 const pick = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
+/** Each load supersedes the one before; one whose answer arrives late, or after the panel is gone, sets nothing and no timer. */
+let asked = 0
 async function loadClones() {
   clearTimeout(timer)
+  const mine = ++asked
   if (!isStream.value) return
+  let list: Clone[]
   try {
-    clones.value = (await api.clones(props.projectId)).clones
+    list = (await api.clones(props.projectId)).clones
   } catch (e) {
-    report(e)
+    if (mine === asked) report(e)
     return
   }
+  if (mine !== asked) return
+  clones.value = list
   // one being made is watched until it is there or has failed
-  if (clones.value.some((c) => c.state === 'cloning' || c.state === 'setting up'))
+  if (list.some((c) => c.state === 'cloning' || c.state === 'setting up'))
     timer = setTimeout(() => void loadClones(), 1000)
 }
-onUnmounted(() => clearTimeout(timer))
+onUnmounted(() => {
+  asked++
+  clearTimeout(timer)
+})
 const available = computed(() =>
   registry.value.filter((r) => !clones.value.some((c) => c.name === r.name)),
 )

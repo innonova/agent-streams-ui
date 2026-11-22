@@ -112,6 +112,15 @@ test('notes are written beside the agent, without a word to it', async ({ page }
   await expect(page.getByTestId('beside-notes-count')).toHaveText('2')
   // nothing went to the agent: its flow has no message from this
   await expect(page.getByTestId('flow-pane')).not.toContainText('squeaks')
+  // a tick the manager refuses leaves the box unticked
+  await page.route('**/api/projects/*/notes/*', (route) =>
+    route.request().method() === 'PATCH'
+      ? route.fulfill({ status: 500, body: '{}' })
+      : route.continue(),
+  )
+  await page.getByTestId('note').first().getByTestId('note-tick').click()
+  await expect(page.getByTestId('note').first().getByTestId('note-tick')).not.toBeChecked()
+  await page.unroute('**/api/projects/*/notes/*')
   // ticked, it leaves the list and is counted as done
   await page.getByTestId('note').first().getByTestId('note-tick').check()
   await expect(page.getByTestId('note')).toHaveCount(1)
@@ -216,4 +225,56 @@ test('an agent is forked into another stream with its conversation', async ({ pa
   await expect(page.getByTestId('flow-pane')).toContainText(
     `Forked from ${row.agent.vendorConversationId}.`,
   )
+})
+
+test('the files of a stream are read beside the agent, and an upload is mentioned to it', async ({
+  page,
+}) => {
+  await login(page)
+  const made = await page.request.post('/api/streams', {
+    data: { name: 'paperwork', purpose: 'Keep the papers in order.', defaultProfile: 'fake' },
+  })
+  const s = ((await made.json()) as { project: { id: string; path: string } }).project
+  const id = await agent(page, s.id, 'clerk')
+  fs.mkdirSync(path.join(s.path, 'stream', 'docs'))
+  fs.writeFileSync(
+    path.join(s.path, 'stream', 'docs', 'plan.md'),
+    '# The plan\n\nFile everything **twice**.\n',
+  )
+
+  await page.goto(`./a/${id}`)
+  await page.getByTestId('beside-files').click()
+  const panel = page.getByTestId('files-panel')
+  // the stream's own folder is there, and a Markdown file in it opens rendered
+  const tree = page.getByTestId('file-tree')
+  await tree.getByText('stream', { exact: true }).click()
+  await tree.getByText('docs', { exact: true }).click()
+  await tree.getByText('plan.md', { exact: true }).click()
+  await expect(page.getByTestId('file-path')).toHaveText('stream/docs/plan.md')
+  await expect(panel.locator('h1')).toHaveText('The plan')
+  await expect(page).toHaveURL(/file=stream(%2F|\/)docs(%2F|\/)plan\.md/)
+  // still beside the agent, whose flow and input are where they were
+  await expect(page.getByTestId('agent-title')).toHaveText(/paperwork\s*›\s*clerk/)
+  const flow = (await page.getByTestId('flow-pane').boundingBox())!
+  const beside = (await page.getByTestId('beside-pane').boundingBox())!
+  expect(flow.width).toBeGreaterThan(250)
+  expect(flow.x + flow.width).toBeLessThanOrEqual(beside.x + 1)
+  expect(await pageOverflow(page)).toBe(0)
+  // a reload comes back to the same file
+  await page.reload()
+  await expect(page.getByTestId('file-path')).toHaveText('stream/docs/plan.md')
+
+  // an upload lands in the selected folder and can be mentioned to the agent this is beside
+  await page.getByTestId('files-upload-input').setInputFiles({
+    name: 'receipt.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('paid\n'),
+  })
+  await page.getByText('mention to the agent').click()
+  await expect(page.getByTestId('turn-input')).toHaveValue('See stream/docs/receipt.txt')
+  expect(fs.readFileSync(path.join(s.path, 'stream', 'docs', 'receipt.txt'), 'utf8')).toBe('paid\n')
+
+  // put away, the file leaves the address with it
+  await page.getByTestId('beside-chat').click()
+  await expect(page).not.toHaveURL(/file=/)
 })

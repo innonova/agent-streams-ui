@@ -30,12 +30,19 @@ const router = useRouter()
 const project = computed(() => projects.byId.get(props.projectId)?.project)
 const list = computed(() => features.byProject.get(props.projectId) ?? [])
 const loaded = ref(false)
+/** A list that could not be read is said to be that, not shown as an empty one. */
+const failed = ref<string | null>(null)
 watch(
   () => props.projectId,
   async (id) => {
     loaded.value = features.byProject.has(id)
-    await features.load(id).catch(report)
-    loaded.value = true
+    failed.value = null
+    try {
+      await features.load(id)
+      if (props.projectId === id) loaded.value = true
+    } catch (e) {
+      if (props.projectId === id) failed.value = e instanceof ApiError ? e.message : String(e)
+    }
   },
   { immediate: true },
 )
@@ -250,7 +257,14 @@ const small = 'rounded border px-2 py-0.5 text-sm'
     <template v-else>
       <div class="min-h-0 grow overflow-y-auto px-3 py-2">
         <p
-          v-if="loaded && list.length === 0"
+          v-if="failed"
+          class="px-1 py-2 text-base text-red-700 dark:text-red-300"
+          data-test="features-failed"
+        >
+          The features could not be read: {{ failed }}
+        </p>
+        <p
+          v-else-if="loaded && list.length === 0"
           class="px-1 py-2 text-base text-slate-500 dark:text-slate-400"
           data-test="features-empty"
         >

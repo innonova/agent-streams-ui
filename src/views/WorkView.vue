@@ -38,6 +38,7 @@ const notifications = useNotificationsStore()
 useAttentionStore() // the title and the favicon count what waits, whatever is on screen
 
 const treePane = useResizable('work-tree', 300, 220, 560)
+const tree = ref<InstanceType<typeof WorkTree> | null>(null)
 const wide = window.matchMedia('(min-width: 768px)')
 const LAST_KEY = 'last-agent'
 
@@ -81,6 +82,12 @@ function leaveAgent() {
   localStorage.removeItem(LAST_KEY)
   void router.replace({ name: 'work' })
 }
+// The agent on screen went away: archived or deleted, here or by someone
+// else. Its pane is gone with it (and with the pane, on a phone, the
+// way back to the tree), so the screen goes back to the tree by itself.
+watch(selected, (now, was) => {
+  if (was && !now && props.agentId === was.agent.id) leaveAgent()
+})
 
 // ---- the application's own few things, under the tree ------------------------
 
@@ -121,10 +128,7 @@ async function createStream() {
       group: streamForm.value.group.trim() || null,
     })
     newStream.value = false
-    // open, so the next thing to do with it (an agent) is in sight
-    const open = new Set<string>(JSON.parse(localStorage.getItem('tree-open') ?? '[]') as string[])
-    open.add(stream.id)
-    localStorage.setItem('tree-open', JSON.stringify([...open]))
+    tree.value?.open(stream.id) // so the next thing to do with it (an agent) is in sight
     openNewAgent(stream.id)
   } catch (e) {
     formError.value = e instanceof ApiError ? e.message : String(e)
@@ -148,7 +152,7 @@ const field =
       data-test="tree-pane"
     >
       <WorkTree
-        :key="newStream ? 'reopen' : 'tree'"
+        ref="tree"
         :agent-id="agentId"
         @new-agent="openNewAgent"
         @new-stream="openNewStream"
@@ -206,7 +210,6 @@ const field =
         :key="agentId"
         :agent-id="agentId"
         @tree="router.push({ name: 'work' })"
-        @gone="leaveAgent"
       />
       <div
         v-else

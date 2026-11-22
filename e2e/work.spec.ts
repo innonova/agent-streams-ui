@@ -81,8 +81,12 @@ test('a stream is started in a group, given an agent, and worked with, all on on
   page.once('dialog', (d) => void d.accept())
   await page.getByTestId('agent-menu').click()
   await page.getByTestId('agent-delete').click()
-  await expect(page.getByTestId('empty')).toBeVisible()
+  // back at the tree with nobody selected, in the address too: not left on a pane that no longer exists
+  await expect(page.getByTestId('empty')).toContainText('Pick an agent')
+  await expect(page).toHaveURL(/\/next\/$/)
   await expect(group.getByTestId('agent-row')).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByTestId('empty')).toContainText('Pick an agent')
 })
 
 test('the tree: groups, what a folded row says, moving a stream, finding one', async ({ page }) => {
@@ -127,9 +131,13 @@ test('the tree: groups, what a folded row says, moving a stream, finding one', a
     page.locator('[data-test=tree-group][data-group=beta]').getByTestId('tree-stream'),
   ).toContainText('loose-end')
 
-  // found by a stream's name, or by an agent's once its stream has been opened
+  // found by a stream's name, or by an agent's, whether or not its stream was ever opened
   await page.getByTestId('tree-filter').fill('quiet')
   await expect(page.getByTestId('tree-stream')).toHaveCount(1)
+  await expect(page.getByTestId('agent-row')).toContainText('idler') // a stream the search opens shows its agents
+  await page.getByTestId('tree-filter').fill('findable')
+  await expect(page.getByTestId('tree-stream')).toHaveCount(1)
+  await expect(page.getByTestId('tree-stream')).toContainText('loose-end')
   await page.getByTestId('tree-filter').fill('asker')
   await expect(page.getByTestId('tree-stream')).toHaveCount(1)
   await expect(page.getByTestId('agent-row')).toContainText('asker')
@@ -206,5 +214,12 @@ test.describe('on a phone', () => {
     await page.getByTestId('tree-button').tap()
     await expect(page.getByTestId('tree-pane')).toBeVisible()
     await expect(page).toHaveURL(/\/next\/$/)
+    // archived by someone else while it is on screen: the screen comes back to the tree by itself
+    await row.getByTestId('agent-row').locator('a').tap()
+    await expect(page.getByTestId('agent')).toBeVisible()
+    await page.request.post(`/api/agents/${id}/archive`)
+    await expect(page.getByTestId('tree-pane')).toBeVisible()
+    await expect(page).toHaveURL(/\/next\/$/)
+    await expect(row.getByTestId('agent-row')).toHaveCount(0)
   })
 })

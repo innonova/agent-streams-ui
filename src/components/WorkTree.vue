@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ApiError, api } from '@/api/client'
 import type { Agent, AgentStatus } from '@/api/types'
@@ -87,19 +87,31 @@ function toggleGroup(name: string | null) {
   remember()
 }
 for (const id of open.value) if (!agents.byProject.has(id)) void loadAgents(id)
-// the selected agent is always in sight: its stream open, its group unfolded
+// The selected agent is always in sight: its stream open, its group
+// unfolded. Its stream may be known before the list of streams is (a
+// deep link), so this runs again when the stream's own record arrives.
 watch(
-  currentProject,
-  (id) => {
+  () => {
+    const id = currentProject.value
+    const row = id ? projects.byId.get(id) : undefined
+    return [id, row ? (row.project.group ?? null) : undefined] as const
+  },
+  ([id, group]) => {
     if (!id) return
     if (!open.value.has(id)) open.value.add(id)
-    const group = projects.byId.get(id)?.project.group ?? null
-    folded.value.delete(groupKey(group))
+    if (group !== undefined) folded.value.delete(groupKey(group))
     remember()
     if (!agents.byProject.has(id)) void loadAgents(id)
   },
   { immediate: true },
 )
+/** Opens a stream from outside the tree: one just made, whose next step is an agent. */
+function openStream(id: string) {
+  if (!open.value.has(id)) open.value.add(id)
+  remember()
+  if (!agents.byProject.has(id)) void loadAgents(id)
+}
+defineExpose({ open: openStream })
 
 const rows = computed(() => projects.rows)
 // which agents have a question open is part of every row, folded ones included
@@ -107,6 +119,13 @@ watch(rows, (list) => list.forEach((r) => chat.ensureProject(r.project.id)), { i
 const agentsOf = (id: string) => agents.byProject.get(id) ?? []
 
 const query = ref('')
+// Looking for something reaches into every stream: an agent is found by
+// its name only once its stream's agents are known, and a stream shown
+// open by the search has to have them to show.
+watch(query, (q, was) => {
+  if (!q.trim() || was.trim()) return
+  for (const r of rows.value) if (!agents.byProject.has(r.project.id)) void loadAgents(r.project.id)
+})
 const groups = computed(() =>
   groupRows(
     rows.value.filter((r) =>
@@ -155,10 +174,15 @@ async function loadArchived(projectId: string) {
   const list = await api.archivedAgents(projectId).catch(() => [])
   archived.value = new Map(archived.value).set(projectId, list)
 }
-events.on((f) => {
-  if ((f.type === 'agent.archived' || f.type === 'agent.removed') && grouping.value === f.projectId)
-    void loadArchived(f.projectId)
-})
+onUnmounted(
+  events.on((f) => {
+    if (
+      (f.type === 'agent.archived' || f.type === 'agent.removed') &&
+      grouping.value === f.projectId
+    )
+      void loadArchived(f.projectId)
+  }),
+)
 </script>
 
 <template>

@@ -114,13 +114,23 @@ of the screen; the chat's input comes and goes with the chat.
 - **Notes**: the add box first and always, the open ones as a
   checklist, the done ones folded. The box empties the moment a note
   is sent, so what is typed next is the next note.
+- **Files**: the stream's own folder and its clones as a tree, and a
+  viewer, carried over from the current UI's files page. Narrow, the
+  tree sits above the file; with room, beside it. The open file is in
+  the address (`?file=`). An upload can be mentioned to the agent the
+  panel is beside: the words land in that agent's input. A Markdown
+  file opens rendered, its frontmatter shown as fields.
 - **Stream** (for a project of the older kind, "project"): what it is
   for, which is its instruction file rendered and editable in place,
   and its clones with the branch each is on, with a way to bring a
   repository in from the registry. A project shows its repositories.
 - What the pane last held is remembered per browser.
 
-Files and changes are not there yet; when they come, this is where.
+The chat takes at most half the width; what is read rather than talked
+in may take up to seven tenths, and all of it with the flow folded to
+its line.
+
+Changes are not there yet; when they come, this is where.
 
 ## Carried over unchanged
 
@@ -133,13 +143,39 @@ guard, presence, attention in the title and favicon, notifications),
 the API and events clients, the iOS viewport handling, the Dark+
 palette, and the reload on a stale chunk after a deploy.
 
+## Reviewed
+
+2026-11-22, a second reader (Claude Opus, reading only) over the new
+components against this document. Ten findings, all concrete, nine
+fixed the same hour, each with a test where one was possible:
+
+- archiving or deleting the agent on screen left the screen on a pane
+  that no longer existed, with no way back on a phone (the pane's own
+  "gone" was emitted after it had been unmounted); the screen now
+  returns to the tree whenever the selected agent leaves the list, by
+  anyone's doing. The test that should have caught it passed for the
+  wrong reason and was tightened;
+- the tree was remounted to pick up a new stream, leaking a listener
+  each time and losing the search;
+- a search showed matching streams open and empty, and could not find
+  an agent in a stream never opened;
+- the selected agent's group could stay folded on a deep link;
+- the clone list's polling could double and outlive its panel;
+- a refused tick left a note's box ticked;
+- a list of features that failed to load read as "no features yet";
+- a failed second step of creating an agent invited creating it twice.
+
+Left: two features with the same slug in two repositories of one
+project open as the first; the manager addresses a feature by slug
+alone, so the fix is there.
+
 ## Not here, and not decided
 
 Each of these exists in the current UI and is reached there (the
 "current UI" link under the tree, and two links in the settings) until
 it has been considered here:
 
-- files and changes;
+- changes (the commits and their diffs);
 - what of a stream's clones is not yet landed on main;
 - an agent's harness note, account usage;
 - users, machines, the harness, models, method and framing texts, the

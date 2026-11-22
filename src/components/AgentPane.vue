@@ -18,6 +18,7 @@ import AgentForm from './AgentForm.vue'
 import AgentStatsDialog from './AgentStatsDialog.vue'
 import ChatPane from './ChatPane.vue'
 import FeaturesPanel from './FeaturesPanel.vue'
+import FilesPanel from './FilesPanel.vue'
 import FlowStrip from './FlowStrip.vue'
 import ModalForm from './ModalForm.vue'
 import NotesPanel from './NotesPanel.vue'
@@ -42,7 +43,7 @@ import TurnInput from './TurnInput.vue'
  * selected agent's and the flow stays in sight while a report is read.
  */
 const props = defineProps<{ agentId: string }>()
-const emit = defineEmits<{ tree: []; gone: [] }>()
+const emit = defineEmits<{ tree: [] }>()
 const agents = useAgentsStore()
 const chat = useChatStore()
 const drafts = useDraftsStore()
@@ -79,8 +80,10 @@ const othersTyping = computed(() => othersHere.value.filter((u) => u.typing))
 
 // ---- the two panes ---------------------------------------------------------
 
-// The chat's width is the one dragged and remembered, and never more than
-// half the pane: beside the tree on a small screen, the flow keeps its share.
+// The width of the pane beside the flow is the one dragged and remembered.
+// The chat never takes more than half: beside the tree on a small screen,
+// the flow keeps its share. What is read rather than talked in (a report,
+// a file) may take more.
 const chatPane = useResizable('agent-chat', 520, 320, 1400, 'left')
 const chatEl = ref<HTMLElement | null>(null)
 /** A drag starts from the width the chat has, which in a small window is less than the one remembered. */
@@ -103,14 +106,16 @@ function setLayout(l: Layout) {
   localStorage.setItem(LAYOUT_KEY, l)
 }
 /** What is in the pane beside the flow: the chat, or something of the agent's stream. */
-const BESIDE = ['chat', 'features', 'notes', 'stream'] as const
+const BESIDE = ['chat', 'features', 'notes', 'files', 'stream'] as const
 type Beside = (typeof BESIDE)[number]
 const BESIDE_KEY = 'agent-beside'
 const beside = ref<Beside>(
-  // a link to a feature opens the features, whatever was there last
+  // a link to a feature or a file opens that, whatever was there last
   typeof route.query.feature === 'string'
     ? 'features'
-    : (BESIDE.find((b) => b === localStorage.getItem(BESIDE_KEY)) ?? 'chat'),
+    : typeof route.query.file === 'string'
+      ? 'files'
+      : (BESIDE.find((b) => b === localStorage.getItem(BESIDE_KEY)) ?? 'chat'),
 )
 function setBeside(b: Beside) {
   beside.value = b
@@ -118,8 +123,10 @@ function setBeside(b: Beside) {
   if (layout.value === 'flow') setLayout('both')
   tab.value = 'beside'
   // an opened feature is in the address: gone from it when the features are put away
-  if (b !== 'features' && route.query.feature !== undefined)
-    void router.replace({ query: { ...route.query, feature: undefined } })
+  const query = { ...route.query }
+  if (b !== 'features') delete query.feature
+  if (b !== 'files') delete query.file
+  if (Object.keys(query).length !== Object.keys(route.query).length) void router.replace({ query })
 }
 /** As tabs, the one in front is the pane the layout keeps: the one beside the flow, unless it was put away. */
 const firstTab = () => (layout.value === 'flow' ? 'flow' : 'beside')
@@ -539,10 +546,8 @@ async function act(what: 'restart' | 'compact' | 'end' | 'archive' | 'delete') {
       )
     )
       return
-    return agents
-      .remove(id)
-      .then(() => emit('gone'))
-      .catch(fail)
+    // gone from the list, this pane goes with it and the screen returns to the tree (see WorkView)
+    return agents.remove(id).catch(fail)
   }
   if (what === 'restart') return api.restart(id).catch(fail)
   if (what === 'end') return api.stop(id).catch(fail)
@@ -559,10 +564,7 @@ async function act(what: 'restart' | 'compact' | 'end' | 'archive' | 'delete') {
       .catch(fail)
   }
   if (!confirm('Archive this agent? Its session ends; everything it said and did is kept.')) return
-  await agents
-    .archive(id)
-    .then(() => emit('gone'))
-    .catch(fail)
+  await agents.archive(id).catch(fail)
 }
 const busy = computed(() => {
   const s = current.value?.status.state
@@ -804,7 +806,7 @@ const busy = computed(() => {
       data-test="pane-tabs"
     >
       <button
-        v-for="t in ['chat', 'flow', 'features', 'notes', 'stream'] as const"
+        v-for="t in ['chat', 'flow', 'features', 'notes', 'files', 'stream'] as const"
         :key="t"
         type="button"
         class="grow border-b-2 px-2 py-2"
@@ -837,7 +839,9 @@ const busy = computed(() => {
       class="grid min-h-0 grow grid-cols-1 grid-rows-[minmax(0,1fr)_auto_auto]"
       :class="
         layout === 'both'
-          ? '@3xl:grid-cols-[minmax(18rem,1fr)_minmax(0,min(var(--chat-w),50%))]'
+          ? beside === 'chat'
+            ? '@3xl:grid-cols-[minmax(18rem,1fr)_minmax(0,min(var(--chat-w),50%))]'
+            : '@3xl:grid-cols-[minmax(18rem,1fr)_minmax(0,min(var(--chat-w),70%))]'
           : ''
       "
       :style="{ '--chat-w': `${chatPane.width.value}px` }"
@@ -946,6 +950,11 @@ const busy = computed(() => {
         </div>
         <FeaturesPanel v-if="beside === 'features'" :project-id="current.agent.projectId" />
         <NotesPanel v-else-if="beside === 'notes'" :project-id="current.agent.projectId" />
+        <FilesPanel
+          v-else-if="beside === 'files'"
+          :project-id="current.agent.projectId"
+          :agent-id="agentId"
+        />
         <StreamPanel v-else-if="beside === 'stream'" :project-id="current.agent.projectId" />
         <ChatPane
           v-else

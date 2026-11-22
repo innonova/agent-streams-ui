@@ -78,11 +78,15 @@ export const useAttentionStore = defineStore('attention', () => {
       el.type = 'image/png'
       el.href = c.toDataURL('image/png')
     }
-    if (baseIcon?.complete) render()
-    else {
+    // An icon that loaded draws at once; one that failed to load is
+    // "complete" too, and drawing it throws, so that is asked as well.
+    // (Changed from agent-manager-ui's copy: this UI is not served at the
+    // root, and its icon is under its own base.)
+    if (baseIcon?.complete && baseIcon.naturalWidth > 0) render()
+    else if (!baseIcon) {
       baseIcon = new Image()
       baseIcon.onload = render
-      baseIcon.src = '/favicon.svg'
+      baseIcon.src = `${import.meta.env.BASE_URL}favicon.svg`
     }
   }
 

@@ -58,8 +58,12 @@ function onKey(e: KeyboardEvent) {
   e.preventDefault()
   void add()
 }
-const tick = (n: NoteItem, value: boolean) =>
-  notes.update(props.projectId, n.id, { done: value }).catch(report)
+/** Ticks or unticks; a tick the manager refuses leaves the box as it was, not as it was clicked. */
+const tick = (n: NoteItem, value: boolean, e: Event) =>
+  notes.update(props.projectId, n.id, { done: value }).catch((err) => {
+    ;(e.target as HTMLInputElement).checked = !value
+    report(err)
+  })
 const remove = (n: NoteItem) => notes.remove(props.projectId, n.id).catch(report)
 
 /** Editing in place: the title and body back into one text, saved on blur or with the modifier. */
@@ -119,7 +123,7 @@ async function saveEdit() {
             class="mt-1 h-4 w-4 shrink-0"
             :checked="false"
             data-test="note-tick"
-            @change="tick(n, true)"
+            @change="tick(n, true, $event)"
           />
           <div v-if="editing?.id === n.id" class="min-w-0 grow">
             <textarea
@@ -180,7 +184,7 @@ async function saveEdit() {
             type="checkbox"
             class="mt-1 h-4 w-4 shrink-0"
             :checked="true"
-            @change="tick(n, false)"
+            @change="tick(n, false, $event)"
           />
           <span class="min-w-0 grow text-base line-through">{{ n.title }}</span>
         </li>

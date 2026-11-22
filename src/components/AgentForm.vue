@@ -62,8 +62,18 @@ async function save(andRestart = false) {
         effort: f.effort || undefined,
         permissions: f.permissions,
       })
-      // the question on stopping is not a session setting: set once the agent exists
-      if (f.nudge) await api.updateAgent(made.id, { nudge: true })
+      // The question on stopping is not a session setting: set once the
+      // agent exists. If that fails the agent is made all the same: the
+      // form closes on it, so that a second "create" cannot make another.
+      if (f.nudge)
+        await api
+          .updateAgent(made.id, { nudge: true })
+          .catch((e) =>
+            notifications.push(
+              'error',
+              `the agent was made, but not set to be asked to go on: ${e instanceof ApiError ? e.message : String(e)}`,
+            ),
+          )
       emit('done', made)
       return
     }
