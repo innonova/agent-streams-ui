@@ -104,6 +104,18 @@ watch(
   },
   { immediate: true },
 )
+/** A clone's state against main, in words: what is not landed first, then how far behind it is. */
+function landingText(c: Clone): string {
+  const l = c.landing
+  if (!l) return ''
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`
+  const parts = [
+    l.unlanded ? `${n(l.unlanded, 'commit', 'commits')} not on main` : '',
+    l.uncommitted ? `${n(l.uncommitted, 'file', 'files')} not committed` : '',
+    l.behind ? `${n(l.behind, 'commit', 'commits')} behind main` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'everything landed'
+}
 const heading =
   'mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400'
 </script>
@@ -209,6 +221,20 @@ const heading =
               >{{ c.state }}</span
             >
           </div>
+          <!-- what of it is not landed: the question a clone exists to answer -->
+          <p
+            v-if="c.landing"
+            class="text-sm"
+            :class="
+              c.landing.unlanded || c.landing.uncommitted
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-slate-500 dark:text-slate-400'
+            "
+            :title="`against ${c.landing.main}, as this clone last fetched it`"
+            data-test="clone-landing"
+          >
+            {{ landingText(c) }}
+          </p>
           <p class="truncate font-mono text-xs text-slate-400" :title="c.path">{{ c.path }}</p>
           <pre
             v-if="c.message"

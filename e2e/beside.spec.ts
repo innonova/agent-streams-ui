@@ -167,6 +167,13 @@ test('a stream says what it is for and what it has cloned, beside its agent', as
     page.locator('[data-test=clone][data-name=thing]').getByTestId('clone-branch'),
   ).toHaveText('main')
   expect(fs.existsSync(path.join(s.path, 'thing', 'README.md'))).toBe(true)
+  // and what of it is not landed, which a fresh clone has none of
+  const landing = page.locator('[data-test=clone][data-name=thing]').getByTestId('clone-landing')
+  await expect(landing).toHaveText('everything landed')
+  fs.writeFileSync(path.join(s.path, 'thing', 'notes.txt'), 'x\n')
+  await page.getByTestId('beside-notes').click()
+  await page.getByTestId('beside-stream').click()
+  await expect(landing).toHaveText('1 file not committed')
   await expect(page.getByTestId('clone-pick')).toHaveCount(0) // nothing left to bring in
   await page.getByTestId('beside-chat').click()
 })

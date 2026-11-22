@@ -36,6 +36,8 @@ export interface Clone {
   state: 'cloning' | 'setting up' | 'ready' | 'failed'
   branch: string | null
   message: string | null
+  /** What of it is not on the repository's main, as the clone last fetched it; null when that cannot be told. */
+  landing?: { main: string; unlanded: number; behind: number; uncommitted: number } | null
 }
 
 export interface Project {
