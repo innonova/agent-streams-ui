@@ -60,6 +60,30 @@ export interface Project {
   /** When agents in the project may start other agents. */
   delegation: 'free' | 'on-request'
   createdAt: number
+  /** A stream that is put away, or on its way there or back, and since when; null or absent when it is simply there. */
+  archive?: { state: 'archiving' | 'archived' | 'reviving'; at: number } | null
+}
+
+/** What putting a stream away would do, and what stands in its way. */
+export interface ArchivePlan {
+  /** Why it cannot be put away as things are. */
+  blocked: string[]
+  /** Work that is not committed and would go with the clones: gone only on a person's word. */
+  uncommitted: { clone: string; count: number; files: string[]; stashes: number }[]
+  /** Branches with commits no remote has, pushed first. */
+  pushes: { clone: string; branch: string; commits: number }[]
+  /** Clones whose remote could not be asked. */
+  unreachable: string[]
+  clones: { name: string; branch: string | null; head: string | null; sizeKb: number }[]
+  agents: { id: string; name: string; state: string; compact: boolean; why: string }[]
+  reclaimKb: number
+}
+
+/** How far a stream is on its way there or back. */
+export interface ArchiveProgress {
+  step: string | null
+  error: string | null
+  done: string | null
 }
 
 export type AgentState =
@@ -298,6 +322,13 @@ export type EventFrame =
   | { type: 'host.reconnected'; name: string }
   | { type: 'daemon'; connected: boolean }
   | { type: 'project.counts'; projectId: string; counts: AgentCounts }
+  /** A stream put away, on its way there or back, or back again (`archive` null). */
+  | {
+      type: 'project.archive'
+      projectId: string
+      archive: Project['archive']
+      progress: ArchiveProgress
+    }
   | { type: 'agent.state'; agentId: string; projectId: string; status: AgentStatus }
   | { type: 'agent.item'; agentId: string; item: StoredItem }
   | { type: 'agent.reset'; agentId: string }

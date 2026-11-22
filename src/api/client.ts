@@ -4,6 +4,7 @@ import type {
   AgentCounts,
   AgentStats,
   AgentStatus,
+  ArchivePlan,
   ChatMessage,
   ChatSummary,
   Clone,
@@ -70,6 +71,18 @@ export const api = {
   me: () => call<{ user: User }>('GET', '/api/auth/me'),
 
   projects: () => call<{ project: Project; agentCounts: AgentCounts }[]>('GET', '/api/projects'),
+  /** The streams that are put away: not among `projects`. */
+  projectsAway: () =>
+    call<{ project: Project; agentCounts: AgentCounts }[]>('GET', '/api/projects?archived=1'),
+  /** What putting a stream away would do; asks its clones' remotes, so it takes a moment. */
+  archivePlan: (projectId: string) =>
+    call<{ plan: ArchivePlan }>('GET', `/api/projects/${projectId}/archive/plan`),
+  /** Puts a stream away; answers at once, and `project.archive` frames say how far it is. */
+  archiveStream: (projectId: string, input: { discard?: boolean; compact?: boolean }) =>
+    call<{ project: Project }>('POST', `/api/projects/${projectId}/archive`, input),
+  /** Brings a stream back; answers at once. */
+  reviveStream: (projectId: string) =>
+    call<{ project: Project }>('POST', `/api/projects/${projectId}/revive`, {}),
   project: (id: string) =>
     call<{ project: Project; agentCounts: AgentCounts }>('GET', `/api/projects/${id}`),
   createProject: (input: {

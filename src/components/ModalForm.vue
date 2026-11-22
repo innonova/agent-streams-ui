@@ -3,6 +3,8 @@ defineProps<{
   title: string
   error?: string | null
   busy?: boolean
+  /** Not to be submitted as it stands (something is missing, or in the way); unlike `busy`, nothing is going on. */
+  disabled?: boolean
   submitLabel?: string
   /** A second way to submit, shown next to the main one. */
   secondaryLabel?: string
@@ -66,7 +68,7 @@ function onKey(e: KeyboardEvent) {
         <button
           type="submit"
           class="rounded bg-blue-600 px-4 py-1.5 text-base text-white hover:bg-blue-700 disabled:opacity-50"
-          :disabled="busy"
+          :disabled="busy || disabled"
           data-test="form-submit"
         >
           {{ busy ? '…' : (submitLabel ?? 'create') }}

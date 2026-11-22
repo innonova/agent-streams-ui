@@ -1,4 +1,5 @@
-/* eslint-disable playwright/no-skipped-test, playwright/expect-expect, playwright/no-wait-for-timeout --
+import { execFileSync } from 'node:child_process'
+/* eslint-disable playwright/no-skipped-test, playwright/no-wait-for-timeout --
    not a test: it takes pictures */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -164,6 +165,37 @@ test('seed', async ({ page }) => {
     'Rename retry_at to next_attempt_at',
   ])
     await page.request.post(`/api/projects/${pay.id}/notes`, { data: { text } })
+
+  // a clone in the payments stream with work in it, for what putting it away would say;
+  // and two streams that are away already
+  const source = path.join(E2E_ROOT, 'look-remote.git')
+  const work = path.join(E2E_ROOT, 'look-work')
+  for (const d of [source, work]) fs.rmSync(d, { recursive: true, force: true })
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], {
+      cwd,
+    })
+  fs.mkdirSync(source, { recursive: true })
+  git(source, 'init', '-q', '--bare', '-b', 'main')
+  git(E2E_ROOT, 'clone', '-q', source, work)
+  fs.writeFileSync(path.join(work, 'README.md'), '# billing\n')
+  git(work, 'add', '-A')
+  git(work, 'commit', '-qm', 'billing')
+  git(work, 'push', '-q', 'origin', 'HEAD:main')
+  await page.request.put('/api/repositories/billing', { data: { source } })
+  await page.request.post(`/api/projects/${pay.id}/clones`, { data: { repository: 'billing' } })
+  const clone = path.join(pay.path, 'billing')
+  await expect.poll(() => fs.existsSync(path.join(clone, 'README.md'))).toBe(true)
+  git(clone, 'checkout', '-q', '-b', 'payments-retry/scheduler')
+  fs.writeFileSync(path.join(clone, 'scheduler.ts'), 'export const delays = [1, 24, 72]\n')
+  git(clone, 'add', '-A')
+  git(clone, 'commit', '-qm', 'the retry scheduler')
+  fs.writeFileSync(path.join(clone, 'probe-output.json'), '{}\n')
+  fs.writeFileSync(path.join(clone, 'notes-to-self.md'), 'x\n')
+  for (const name of ['invoice-pdf', 'spring-cleanup']) {
+    const done = await stream(page, name, name === 'invoice-pdf' ? 'mimiri' : null)
+    await page.request.post(`/api/projects/${done.id}/archive`, { data: {} })
+  }
 })
 
 const sizes = {
@@ -207,6 +239,16 @@ for (const [name, size] of Object.entries(sizes))
       for (const g of await page.getByTestId('group-toggle').all()) await g.click()
       await page.waitForTimeout(300)
       await page.screenshot({ path: `${OUT}/${name}-${scheme}-5-folded.png` })
+      for (const g of await page.getByTestId('group-toggle').all()) await g.click()
+      await page.getByTestId('away-toggle').click()
+      const row = page.locator('[data-test=tree-stream]', { hasText: 'payments-retry' })
+      await row.getByTestId('stream-group').click()
+      await page.waitForTimeout(300)
+      await page.screenshot({ path: `${OUT}/${name}-${scheme}-8-away.png` })
+      await row.getByTestId('stream-put-away').click()
+      await expect(page.getByTestId('archive-agents')).toBeVisible()
+      await page.waitForTimeout(300)
+      await page.screenshot({ path: `${OUT}/${name}-${scheme}-9-put-away.png` })
       await ctx.close()
     })
 
@@ -238,5 +280,15 @@ test('phone', async ({ browser }) => {
   await page.getByTestId('pane-tab-flow').tap()
   await page.waitForTimeout(500)
   await page.screenshot({ path: `${OUT}/phone-5-flow.png` })
+  await page.goto('./')
+  await page.getByTestId('away-toggle').tap()
+  const row = page.locator('[data-test=tree-stream]', { hasText: 'payments-retry' })
+  await row.getByTestId('stream-group').tap()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: `${OUT}/phone-6-away.png` })
+  await row.getByTestId('stream-put-away').tap()
+  await expect(page.getByTestId('archive-agents')).toBeVisible()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: `${OUT}/phone-7-put-away.png` })
   await ctx.close()
 })

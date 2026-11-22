@@ -319,3 +319,61 @@ test('what changed is read beside the agent: its own commits first, everyone’s
   await page.getByTestId('changes-agent').click()
   await page.getByTestId('beside-chat').click()
 })
+
+test('a stream is put away once it has said what that does, and brought back from under the tree', async ({
+  page,
+}) => {
+  await login(page)
+  const s = await stream(page, 'seasonal')
+  const id = await agent(page, s.id, 'keeper')
+  // a clone of its own, with a file nobody committed
+  const source = path.join(E2E_ROOT, 'seasonal-source')
+  fs.rmSync(source, { recursive: true, force: true })
+  fs.mkdirSync(source, { recursive: true })
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], {
+      cwd: source,
+    })
+  git('init', '-q', '-b', 'main')
+  fs.writeFileSync(path.join(source, 'README.md'), '# decorations\n')
+  git('add', '-A')
+  git('commit', '-qm', 'decorations')
+  await page.request.put('/api/repositories/decorations', { data: { source } })
+  await page.request.post(`/api/projects/${s.id}/clones`, { data: { repository: 'decorations' } })
+  const clone = path.join(s.path, 'decorations')
+  await expect.poll(() => fs.existsSync(path.join(clone, 'README.md'))).toBe(true)
+  fs.writeFileSync(path.join(clone, 'scratch.txt'), 'x\n')
+
+  await page.goto(`./a/${id}`)
+  const row = page.locator('[data-test=tree-stream]', { hasText: 'seasonal' })
+  await row.getByTestId('stream-group').click()
+  await row.getByTestId('stream-put-away').click()
+  // what it will do, before it is done: the file that would be lost stands in the way until let go
+  const dialog = page.getByTestId('archive-dialog')
+  await expect(dialog.getByTestId('archive-uncommitted')).toContainText('decorations')
+  await expect(dialog.getByTestId('archive-uncommitted')).toContainText('scratch.txt')
+  await expect(dialog.getByTestId('archive-agents')).toContainText('keeper')
+  await expect(dialog.getByTestId('form-submit')).toBeDisabled()
+  expect(await pageOverflow(page)).toBe(0)
+  await dialog.getByTestId('archive-discard').check()
+  await dialog.getByTestId('form-submit').click()
+  // away: out of the tree, the agent's page left for the tree, the clone off the disk
+  await expect(page.locator('[data-test=tree-stream]', { hasText: 'seasonal' })).toHaveCount(0)
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL(/\/next\/$/)
+  expect(fs.existsSync(clone)).toBe(false)
+  expect(fs.existsSync(path.join(s.path, 'AGENTS.md'))).toBe(true)
+
+  // and found where one looks for a stream that is not there
+  await page.getByTestId('away-toggle').click()
+  const away = page.locator('[data-test=away-row]', { hasText: 'seasonal' })
+  await away.getByTestId('away-bring-back').click()
+  await expect(page.locator('[data-test=tree-stream]', { hasText: 'seasonal' })).toHaveCount(1)
+  await expect(page.locator('[data-test=away-row]', { hasText: 'seasonal' })).toHaveCount(0)
+  await expect.poll(() => fs.existsSync(path.join(clone, 'README.md'))).toBe(true)
+  expect(fs.existsSync(path.join(clone, 'scratch.txt'))).toBe(false)
+  // its agent is there again, and is spoken to as before
+  await expect(page.locator('[data-test=stream-moving]')).toHaveCount(0)
+  await page.locator('[data-test=tree-stream]', { hasText: 'seasonal' }).getByText('keeper').click()
+  await expect(page.getByTestId('agent-header')).toContainText('keeper')
+})

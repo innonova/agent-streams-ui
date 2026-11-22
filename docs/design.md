@@ -73,8 +73,22 @@ One screen, and nothing above it.
   streams whose agents are loaded) agent name, and shows what matched
   whatever was folded.
 - A stream's "⋯" holds what is done to it rather than in it: its group,
-  and its archived agents.
+  its archived agents, and putting it away.
 - The selected agent's stream is always open and its group unfolded.
+- **Putting a stream away says first what that will do.** The dialog
+  asks the manager for the plan and shows it before anything happens:
+  how much disk comes back, which branches are pushed first, which
+  files are not committed and would be lost (these take a tick, "let
+  these go", before the button works), which agents are compacted, and
+  in red whatever stands in the way. Under way, it follows the steps to
+  the end; then the stream is out of the tree, and if the agent on
+  screen was one of its own the page goes back to the tree. A row that
+  is on its way there or back says so.
+- **Streams that are away are a line under the tree**, "2 put away",
+  folded: a stream that is not in the tree is looked for there. Each
+  has "bring back"; a stream coming back is in the tree again at once,
+  marked until its clones are made. One that could not be put away or
+  brought back says why in a toast, wherever the person is by then.
 
 ## The agent
 
@@ -179,8 +193,7 @@ Each of these exists in the current UI and is reached there (the
 "current UI" link under the tree, and two links in the settings) until
 it has been considered here:
 
-- what of a stream's clones is not yet landed on main;
-- an agent's harness note, account usage;
+- an agent's harness note;
 - users, machines, the harness, models, method and framing texts, the
   learnings log;
 - creating or editing a project of the old kind (a list of

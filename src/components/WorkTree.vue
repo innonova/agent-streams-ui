@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { ApiError, api } from '@/api/client'
-import type { Agent, AgentStatus } from '@/api/types'
+import type { Agent, AgentStatus, Project } from '@/api/types'
 import { events } from '@/api/events'
-import { when } from '@/time'
+import { since, when } from '@/time'
 import { useAgentsStore } from '@/stores/agents'
 import { useAttentionStore } from '@/stores/attention'
 import { useChatStore } from '@/stores/chat'
@@ -12,6 +12,7 @@ import { useHostsStore } from '@/stores/hosts'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useProjectsStore, type ProjectRow } from '@/stores/projects'
 import { addRollups, groupNames, groupRows, matches, rollup } from '@/tree'
+import ArchiveDialog from './ArchiveDialog.vue'
 import RollupMarks from './RollupMarks.vue'
 import StateMark from './StateMark.vue'
 
@@ -183,6 +184,44 @@ onUnmounted(
       void loadArchived(f.projectId)
   }),
 )
+
+/**
+ * Putting a stream away, and bringing one back. A stream that is away
+ * is out of the tree; the ones that are, are a line under it, since
+ * that is where one looks for a stream that is not there.
+ */
+const router = useRouter()
+const puttingAway = ref<Project | null>(null)
+function putAwayDone() {
+  const gone = puttingAway.value
+  puttingAway.value = null
+  grouping.value = null
+  // the agent on screen went away with its stream: back to the tree
+  if (gone && gone.id === currentProject.value) void router.push({ name: 'work' })
+}
+const showAway = ref(false)
+async function bringBack(p: Project) {
+  try {
+    await projects.bringBack(p.id)
+  } catch (e) {
+    notifications.push('error', e instanceof ApiError ? e.message : String(e))
+  }
+}
+// One that did not get there or back says why, wherever the person is
+// looking by then (the dialog says it itself while it is open).
+onUnmounted(
+  events.on((f) => {
+    if (f.type !== 'project.archive' || !f.progress.error || puttingAway.value) return
+    const name =
+      projects.byId.get(f.projectId)?.project.name ??
+      projects.away.find((r) => r.project.id === f.projectId)?.project.name ??
+      'a stream'
+    notifications.push(
+      'error',
+      `${name} was not ${f.archive?.state === 'archived' ? 'brought back' : 'put away'}: ${f.progress.error}`,
+    )
+  }),
+)
 </script>
 
 <template>
@@ -309,6 +348,15 @@ onUnmounted(
                 </svg>
                 <span class="truncate">{{ r.project.name }}</span>
                 <span
+                  v-if="r.project.archive"
+                  class="shrink-0 animate-pulse text-xs font-normal text-slate-500 italic dark:text-slate-400"
+                  :title="projects.moving.get(r.project.id)?.progress.step ?? ''"
+                  data-test="stream-moving"
+                  >{{
+                    r.project.archive.state === 'reviving' ? 'coming back…' : 'being put away…'
+                  }}</span
+                >
+                <span
                   v-if="hosts.isRemote(r.project.host)"
                   class="rounded bg-slate-100 px-1 text-[10px] font-normal text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                   >{{ r.project.host }}</span
@@ -319,7 +367,7 @@ onUnmounted(
                 type="button"
                 class="shrink-0 rounded px-1 text-slate-400 opacity-0 group-hover/row:opacity-100 hover:bg-slate-100 hover:text-slate-800 focus:opacity-100 dark:hover:bg-slate-800 dark:hover:text-slate-100 pointer-coarse:opacity-100"
                 :class="grouping === r.project.id ? 'opacity-100' : ''"
-                title="Its group, and its archived agents"
+                title="Its group, its archived agents, and putting it away"
                 data-test="stream-group"
                 @click="startGrouping(r)"
               >
@@ -371,6 +419,16 @@ onUnmounted(
                   move
                 </button>
               </form>
+              <button
+                v-if="r.project.kind === 'stream' && !r.project.archive"
+                type="button"
+                class="mt-1.5 rounded border border-slate-300 px-2 py-0.5 text-sm text-slate-700 hover:border-blue-500 hover:text-blue-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-blue-400 dark:hover:text-blue-300"
+                title="Its folder and its agents are kept and its clones come off the disk; it can be brought back. You are shown what it will do first."
+                data-test="stream-put-away"
+                @click="puttingAway = r.project"
+              >
+                put away…
+              </button>
               <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                 archived agents:
                 <span v-if="(archived.get(r.project.id) ?? []).length === 0">none</span>
@@ -444,6 +502,69 @@ onUnmounted(
       >
         {{ query.trim() ? 'nothing by that name' : 'no streams yet' }}
       </li>
+      <!-- the streams that are put away: not in the tree, and found where one looks for them -->
+      <li v-if="projects.away.length" class="mt-2 px-2 pb-2" data-test="tree-away">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 py-1 text-left text-xs text-slate-500 hover:text-slate-800 max-md:min-h-[44px] dark:text-slate-400 dark:hover:text-slate-100"
+          data-test="away-toggle"
+          @click="showAway = !showAway"
+        >
+          <svg
+            class="h-3 w-3 shrink-0 transition-transform duration-100"
+            :class="showAway ? 'rotate-90' : ''"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 3.5L10.5 8 6 12.5" />
+          </svg>
+          {{ projects.away.length }} put away
+        </button>
+        <ul v-if="showAway">
+          <li
+            v-for="r in projects.away"
+            :key="r.project.id"
+            class="flex items-center gap-2 py-1 pl-5 text-sm text-slate-600 max-md:min-h-[44px] dark:text-slate-300"
+            data-test="away-row"
+          >
+            <span class="truncate">{{ r.project.name }}</span>
+            <span
+              class="shrink-0 text-xs text-slate-400 dark:text-slate-500"
+              :title="r.project.archive ? new Date(r.project.archive.at).toLocaleString() : ''"
+              >{{ r.project.archive ? `${since(r.project.archive.at)} ago` : '' }}</span
+            >
+            <span class="grow" />
+            <span
+              v-if="r.project.archive?.state === 'reviving'"
+              class="shrink-0 animate-pulse text-xs italic"
+              :title="projects.moving.get(r.project.id)?.progress.step ?? ''"
+              data-test="away-coming"
+              >coming back…</span
+            >
+            <button
+              v-else
+              type="button"
+              class="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-xs hover:border-blue-500 hover:text-blue-700 dark:border-slate-700 dark:hover:border-blue-400 dark:hover:text-blue-300"
+              title="Its clones are made again and set up; each of its agents is told at its next start how long it was away and what landed meanwhile."
+              data-test="away-bring-back"
+              @click="bringBack(r.project)"
+            >
+              bring back
+            </button>
+          </li>
+        </ul>
+      </li>
     </ul>
+    <ArchiveDialog
+      v-if="puttingAway"
+      :project="puttingAway"
+      @close="puttingAway = null"
+      @done="putAwayDone"
+    />
   </nav>
 </template>
