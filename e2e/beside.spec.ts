@@ -132,17 +132,16 @@ test('a stream says what it is for and what it has cloned, beside its agent', as
   const id = await agent(page, s.id, 'walker')
   // a repository in the registry, to bring in
   const source = path.join(E2E_ROOT, 'registry-source')
-  if (!fs.existsSync(source)) {
-    fs.mkdirSync(source, { recursive: true })
-    const git = (...args: string[]) =>
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], {
-        cwd: source,
-      })
-    git('init', '-q', '-b', 'main')
-    fs.writeFileSync(path.join(source, 'README.md'), '# a thing\n')
-    git('add', '-A')
-    git('commit', '-qm', 'a thing')
-  }
+  fs.rmSync(source, { recursive: true, force: true })
+  fs.mkdirSync(source, { recursive: true })
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], {
+      cwd: source,
+    })
+  git('init', '-q', '-b', 'main')
+  fs.writeFileSync(path.join(source, 'README.md'), '# a thing\n')
+  git('add', '-A')
+  git('commit', '-qm', 'a thing')
   await page.request.put('/api/repositories/thing', { data: { source } })
 
   await page.goto(`./a/${id}`)
