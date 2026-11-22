@@ -67,6 +67,8 @@ const othersTyping = computed(() => othersHere.value.filter((u) => u.typing))
 
 // ---- the two panes ---------------------------------------------------------
 
+// The chat's width is the one dragged and remembered, and never more than
+// half the pane: beside the tree on a small screen, the flow keeps its share.
 const chatPane = useResizable('agent-chat', 520, 320, 1400, 'left')
 const chatEl = ref<HTMLElement | null>(null)
 /** A drag starts from the width the chat has, which in a small window is less than the one remembered. */
@@ -663,7 +665,11 @@ const busy = computed(() => {
     </div>
     <div
       class="grid min-h-0 grow grid-cols-1 grid-rows-[minmax(0,1fr)_auto_auto]"
-      :class="layout === 'both' ? '@3xl:grid-cols-[minmax(18rem,1fr)_minmax(0,var(--chat-w))]' : ''"
+      :class="
+        layout === 'both'
+          ? '@3xl:grid-cols-[minmax(18rem,1fr)_minmax(0,min(var(--chat-w),50%))]'
+          : ''
+      "
       :style="{ '--chat-w': `${chatPane.width.value}px` }"
       data-test="agent-panes"
     >
