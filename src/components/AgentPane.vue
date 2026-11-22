@@ -803,14 +803,14 @@ const busy = computed(() => {
     </header>
     <!-- too narrow for two panes: tabs, the chat first unless it was put away -->
     <div
-      class="flex shrink-0 border-b border-slate-200 bg-white text-base @3xl:hidden dark:border-slate-800 dark:bg-slate-900"
+      class="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-white text-base whitespace-nowrap @3xl:hidden dark:border-slate-800 dark:bg-slate-900"
       data-test="pane-tabs"
     >
       <button
         v-for="t in ['chat', 'flow', 'features', 'notes', 'files', 'changes', 'stream'] as const"
         :key="t"
         type="button"
-        class="grow border-b-2 px-2 py-2"
+        class="shrink-0 grow border-b-2 px-3 py-2"
         :class="
           (t === 'flow' ? tab === 'flow' : tab === 'beside' && beside === t)
             ? 'border-blue-600 font-medium'
@@ -902,7 +902,7 @@ const busy = computed(() => {
         </div>
         <!-- what is in this pane: chosen here where there is room for two panes, in the tabs above otherwise -->
         <div
-          class="hidden shrink-0 items-center gap-1 border-b border-slate-200 px-2 text-sm @3xl:flex dark:border-slate-800"
+          class="hidden shrink-0 items-center gap-1 overflow-x-auto border-b border-slate-200 px-2 text-sm whitespace-nowrap @3xl:flex dark:border-slate-800"
           role="tablist"
           aria-label="beside the flow"
           data-test="beside-tabs"
@@ -912,7 +912,7 @@ const busy = computed(() => {
             :key="b"
             type="button"
             role="tab"
-            class="-mb-px border-b-2 px-2 py-1.5"
+            class="-mb-px shrink-0 border-b-2 px-2 py-1.5"
             :class="
               beside === b
                 ? 'border-blue-600 font-medium text-slate-900 dark:text-slate-100'
@@ -945,7 +945,7 @@ const busy = computed(() => {
             >
           </button>
           <span class="grow" />
-          <span class="truncate text-xs text-slate-400 dark:text-slate-500">{{
+          <span class="hidden truncate text-xs text-slate-400 @5xl:inline dark:text-slate-500">{{
             beside === 'chat' ? `with ${current.agent.name}` : `of ${project?.name ?? ''}`
           }}</span>
         </div>

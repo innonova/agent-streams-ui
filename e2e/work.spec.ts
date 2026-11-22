@@ -208,6 +208,13 @@ test.describe('on a phone', () => {
     await expect(page.getByTestId('tree-pane')).toBeHidden()
     await expect(page.getByTestId('chat-pane')).toBeVisible()
     await expect(page.getByTestId('flow-pane')).toBeHidden()
+    // the tabs are one line, however many there are: they scroll sideways and never stack
+    const tabs = (await page.getByTestId('pane-tabs').boundingBox())!
+    expect(tabs.height).toBeLessThan(52)
+    await page.getByTestId('pane-tab-stream').scrollIntoViewIfNeeded()
+    await page.getByTestId('pane-tab-stream').tap()
+    await expect(page.getByTestId('stream-panel')).toBeVisible()
+    await page.getByTestId('pane-tab-flow').scrollIntoViewIfNeeded()
     await page.getByTestId('pane-tab-flow').tap()
     await expect(page.getByTestId('flow-pane')).toBeVisible()
     expect(await pageOverflow(page)).toBe(0)
