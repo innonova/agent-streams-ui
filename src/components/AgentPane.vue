@@ -20,6 +20,7 @@ import ChatPane from './ChatPane.vue'
 import FeaturesPanel from './FeaturesPanel.vue'
 import FlowStrip from './FlowStrip.vue'
 import NotesPanel from './NotesPanel.vue'
+import StreamPanel from './StreamPanel.vue'
 import NudgeNotice from './NudgeNotice.vue'
 import ResizeHandle from './ResizeHandle.vue'
 import StateBadge from './StateBadge.vue'
@@ -101,7 +102,7 @@ function setLayout(l: Layout) {
   localStorage.setItem(LAYOUT_KEY, l)
 }
 /** What is in the pane beside the flow: the chat, or something of the agent's stream. */
-const BESIDE = ['chat', 'features', 'notes'] as const
+const BESIDE = ['chat', 'features', 'notes', 'stream'] as const
 type Beside = (typeof BESIDE)[number]
 const BESIDE_KEY = 'agent-beside'
 const beside = ref<Beside>(
@@ -196,6 +197,9 @@ const chatNews = computed(() =>
       ].filter((c) => c.n > 0),
 )
 const showChat = () => setBeside('chat')
+/** What a tab is called: the last one is the stream, or for the older kind the project. */
+const label = (b: Beside) =>
+  b === 'stream' ? (project.value?.kind === 'stream' ? 'stream' : 'project') : b
 
 // ---- loading ---------------------------------------------------------------
 
@@ -628,7 +632,7 @@ const busy = computed(() => {
           :data-test="`panes-${l}`"
           @click="setLayout(l)"
         >
-          {{ l === 'chat' ? beside : l }}
+          {{ l === 'chat' ? label(beside) : l }}
           <template v-if="l === 'chat' && beside === 'chat'">
             <span
               v-for="c in chatNews"
@@ -757,7 +761,7 @@ const busy = computed(() => {
       data-test="pane-tabs"
     >
       <button
-        v-for="t in ['chat', 'flow', 'features', 'notes'] as const"
+        v-for="t in ['chat', 'flow', 'features', 'notes', 'stream'] as const"
         :key="t"
         type="button"
         class="grow border-b-2 px-2 py-2"
@@ -770,7 +774,7 @@ const busy = computed(() => {
         :aria-selected="t === 'flow' ? tab === 'flow' : tab === 'beside' && beside === t"
         @click="t === 'flow' ? (tab = 'flow') : setBeside(t)"
       >
-        {{ t }}
+        {{ t === 'flow' ? t : label(t) }}
         <span
           v-if="t === 'chat' && openQuestions"
           class="ml-1 rounded bg-amber-100 px-1.5 text-sm text-amber-900 dark:bg-amber-900 dark:text-amber-100"
@@ -870,7 +874,7 @@ const busy = computed(() => {
             :data-test="`beside-${b}`"
             @click="setBeside(b)"
           >
-            {{ b }}
+            {{ label(b) }}
             <span
               v-if="b === 'chat' && openQuestions"
               class="ml-0.5 rounded bg-amber-100 px-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100"
@@ -899,6 +903,7 @@ const busy = computed(() => {
         </div>
         <FeaturesPanel v-if="beside === 'features'" :project-id="current.agent.projectId" />
         <NotesPanel v-else-if="beside === 'notes'" :project-id="current.agent.projectId" />
+        <StreamPanel v-else-if="beside === 'stream'" :project-id="current.agent.projectId" />
         <ChatPane
           v-else
           :messages="messages"

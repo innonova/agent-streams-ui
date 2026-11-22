@@ -114,6 +114,10 @@ of the screen; the chat's input comes and goes with the chat.
 - **Notes**: the add box first and always, the open ones as a
   checklist, the done ones folded. The box empties the moment a note
   is sent, so what is typed next is the next note.
+- **Stream** (for a project of the older kind, "project"): what it is
+  for, which is its instruction file rendered and editable in place,
+  and its clones with the branch each is on, with a way to bring a
+  repository in from the registry. A project shows its repositories.
 - What the pane last held is remembered per browser.
 
 Files and changes are not there yet; when they come, this is where.
@@ -136,7 +140,7 @@ Each of these exists in the current UI and is reached there (the
 it has been considered here:
 
 - files and changes;
-- a stream's own page: its purpose, its clones and what is not landed;
+- what of a stream's clones is not yet landed on main;
 - an agent's harness note, account usage;
 - users, machines, the harness, models, method and framing texts, the
   learnings log;

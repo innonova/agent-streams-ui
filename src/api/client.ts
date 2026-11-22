@@ -6,6 +6,7 @@ import type {
   AgentStatus,
   ChatMessage,
   ChatSummary,
+  Clone,
   CommitFiles,
   CommitsResult,
   DirEntry,
@@ -22,6 +23,7 @@ import type {
   Project,
   RepoChanges,
   RepoInput,
+  Repository,
   StoredItem,
   TurnImage,
   User,
@@ -96,6 +98,14 @@ export const api = {
     group?: string | null
   }) => call<{ project: Project; agentCounts: AgentCounts }>('POST', '/api/streams', input),
   deleteProject: (id: string) => call<{ ok: true }>('DELETE', `/api/projects/${id}`),
+  /** The registry of repositories a stream clones from. */
+  repositories: () => call<{ repositories: Repository[] }>('GET', '/api/repositories'),
+  /** The clones in a stream's home, with the ones being made. */
+  clones: (projectId: string) =>
+    call<{ clones: Clone[] }>('GET', `/api/projects/${projectId}/clones`),
+  /** Starts a clone of a registered repository in the stream's home; `clones` says how far it is. */
+  useRepository: (projectId: string, repository: string) =>
+    call<{ clone: Clone }>('POST', `/api/projects/${projectId}/clones`, { repository }),
   /** Stops and resumes the project's idle agents so they see its current settings. */
   restartAgents: (id: string) =>
     call<{ restarted: string[]; skipped: { id: string; why: string }[] }>(

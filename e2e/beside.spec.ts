@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -119,5 +120,54 @@ test('notes are written beside the agent, without a word to it', async ({ page }
   // the pane remembers what was in it, for the next agent looked at
   await page.reload()
   await expect(page.getByTestId('notes-panel')).toBeVisible()
+  await page.getByTestId('beside-chat').click()
+})
+
+test('a stream says what it is for and what it has cloned, beside its agent', async ({ page }) => {
+  await login(page)
+  const made = await page.request.post('/api/streams', {
+    data: { name: 'grounded', purpose: 'Keep both feet on the floor.', defaultProfile: 'fake' },
+  })
+  const s = ((await made.json()) as { project: { id: string; path: string } }).project
+  const id = await agent(page, s.id, 'walker')
+  // a repository in the registry, to bring in
+  const source = path.join(E2E_ROOT, 'registry-source')
+  if (!fs.existsSync(source)) {
+    fs.mkdirSync(source, { recursive: true })
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], {
+        cwd: source,
+      })
+    git('init', '-q', '-b', 'main')
+    fs.writeFileSync(path.join(source, 'README.md'), '# a thing\n')
+    git('add', '-A')
+    git('commit', '-qm', 'a thing')
+  }
+  await page.request.put('/api/repositories/thing', { data: { source } })
+
+  await page.goto(`./a/${id}`)
+  await page.getByTestId('beside-stream').click()
+  const panel = page.getByTestId('stream-panel')
+  await expect(panel).toContainText(s.path)
+  await expect(page.getByTestId('stream-purpose')).toContainText('Keep both feet on the floor.')
+  // its purpose is corrected here, in the file its agents read
+  await page.getByTestId('stream-edit').click()
+  await page
+    .getByTestId('stream-text')
+    .fill('# grounded\n\nKeep both feet on the floor, and look up now and then.\n')
+  await page.getByTestId('stream-save').click()
+  await expect(page.getByTestId('stream-purpose')).toContainText('look up now and then')
+  expect(
+    fs.readFileSync(path.join(E2E_ROOT, 'streams', '.store', 'grounded', 'AGENTS.md'), 'utf8'),
+  ).toContain('look up now and then')
+  // a repository is brought in from the registry, and shows the branch it is on
+  await expect(page.getByTestId('clone')).toHaveCount(0)
+  await page.getByTestId('clone-pick').selectOption('thing')
+  await page.getByTestId('clone-use').click()
+  await expect(
+    page.locator('[data-test=clone][data-name=thing]').getByTestId('clone-branch'),
+  ).toHaveText('main')
+  expect(fs.existsSync(path.join(s.path, 'thing', 'README.md'))).toBe(true)
+  await expect(page.getByTestId('clone-pick')).toHaveCount(0) // nothing left to bring in
   await page.getByTestId('beside-chat').click()
 })

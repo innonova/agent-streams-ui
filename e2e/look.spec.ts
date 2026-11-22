@@ -51,7 +51,16 @@ async function asAgent(page: Page, id: string) {
 test('seed', async ({ page }) => {
   fs.mkdirSync(OUT, { recursive: true })
   await login(page)
-  const pay = await stream(page, 'payments-retry', 'mimiri')
+  const made = await page.request.post('/api/streams', {
+    data: {
+      name: 'payments-retry',
+      group: 'mimiri',
+      defaultProfile: 'fake',
+      purpose:
+        'Make failed card payments retry on a schedule, and tell the customer once.\n\nA good result: a failed renewal is retried after 1 hour, 1 day and 3 days, and support can see where a payment is in that sequence.',
+    },
+  })
+  const pay = ((await made.json()) as { project: { id: string; path: string } }).project
   const sync = await stream(page, 'sync-conflicts', 'mimiri')
   const estate = await stream(page, 'estate', 'infrastructure')
   const dns = await stream(page, 'dns-cutover', 'infrastructure')
@@ -185,6 +194,9 @@ for (const [name, size] of Object.entries(sizes))
       await page.getByTestId('beside-notes').click()
       await page.waitForTimeout(500)
       await page.screenshot({ path: `${OUT}/${name}-${scheme}-4-notes.png` })
+      await page.getByTestId('beside-stream').click()
+      await page.waitForTimeout(500)
+      await page.screenshot({ path: `${OUT}/${name}-${scheme}-6-stream.png` })
       await page.getByTestId('beside-chat').click()
       for (const g of await page.getByTestId('group-toggle').all()) await g.click()
       await page.waitForTimeout(300)

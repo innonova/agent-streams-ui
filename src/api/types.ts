@@ -19,6 +19,25 @@ export interface RepoInput {
   path: string
 }
 
+/** A repository a stream can clone, as the manager's registry has it. */
+export interface Repository {
+  name: string
+  source: string
+  setup: string | null
+  /** The untracked files copied into a fresh clone. */
+  seed: string[]
+  /** The streams that have a clone of it. */
+  usedBy: string[]
+}
+/** A clone in a stream's home, and how far the making of it is. */
+export interface Clone {
+  name: string
+  path: string
+  state: 'cloning' | 'setting up' | 'ready' | 'failed'
+  branch: string | null
+  message: string | null
+}
+
 export interface Project {
   id: string
   name: string
