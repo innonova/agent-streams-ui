@@ -104,8 +104,11 @@ export const api = {
   clones: (projectId: string) =>
     call<{ clones: Clone[] }>('GET', `/api/projects/${projectId}/clones`),
   /** Starts a clone of a registered repository in the stream's home; `clones` says how far it is. */
-  useRepository: (projectId: string, repository: string) =>
-    call<{ clone: Clone }>('POST', `/api/projects/${projectId}/clones`, { repository }),
+  useRepository: (projectId: string, repository: string, again = false) =>
+    call<{ clone: Clone }>('POST', `/api/projects/${projectId}/clones`, {
+      repository,
+      ...(again ? { again: true } : {}),
+    }),
   /** Stops and resumes the project's idle agents so they see its current settings. */
   restartAgents: (id: string) =>
     call<{ restarted: string[]; skipped: { id: string; why: string }[] }>(

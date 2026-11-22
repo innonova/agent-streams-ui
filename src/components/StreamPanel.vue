@@ -99,6 +99,15 @@ async function use() {
     report(e)
   }
 }
+/** A clone whose setup failed or was cut short: run it once more, on a person's word. */
+async function setUpAgain(name: string) {
+  try {
+    await api.useRepository(props.projectId, name, true)
+    await loadClones()
+  } catch (e) {
+    report(e)
+  }
+}
 watch(
   () => [props.projectId, isStream.value] as const,
   () => {
@@ -245,6 +254,16 @@ const heading =
             {{ landingText(c) }}
           </p>
           <p class="truncate font-mono text-xs text-slate-400" :title="c.path">{{ c.path }}</p>
+          <button
+            v-if="c.state === 'failed' && c.branch"
+            type="button"
+            class="mt-1 rounded border border-slate-300 px-2 py-0.5 text-sm hover:border-blue-500 dark:border-slate-700"
+            title="The clone is there; its setup did not finish. Run the setup command once more."
+            data-test="clone-setup-again"
+            @click="setUpAgain(c.name)"
+          >
+            run its setup again
+          </button>
           <pre
             v-if="c.message"
             class="mt-1 max-h-40 overflow-auto rounded bg-slate-100 p-2 text-xs whitespace-pre-wrap text-slate-700 dark:bg-slate-800 dark:text-slate-300"
