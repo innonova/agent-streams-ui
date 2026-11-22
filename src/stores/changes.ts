@@ -25,6 +25,8 @@ export const useChangesStore = defineStore('changes', () => {
   const filterRepo = ref<string | null>(null)
   const filterFeature = ref<string | null>(null)
   const filterAgent = ref<string | null>(null)
+  /** For a stream: the whole of what its clones hold was asked for, not only its own commits. */
+  const wholeRepository = ref(false)
   // the selected commit (or working tree) and its file list
   const selection = ref<Selection | null>(null)
   const selFiles = ref<ChangedFile[]>([])
@@ -60,6 +62,7 @@ export const useChangesStore = defineStore('changes', () => {
       open.value = null
       openPath.value = null
       filterRepo.value = filterFeature.value = filterAgent.value = null
+      wholeRepository.value = false
     }
     projectId.value = id
     await loadCommits()
@@ -74,6 +77,7 @@ export const useChangesStore = defineStore('changes', () => {
         repo: filterRepo.value ?? undefined,
         feature: filterFeature.value ?? undefined,
         agent: filterAgent.value ?? undefined,
+        scope: wholeRepository.value ? 'repository' : undefined,
       })
       if (projectId.value !== forProject) return
       commits.value = r.commits
@@ -88,10 +92,17 @@ export const useChangesStore = defineStore('changes', () => {
     }
   }
 
-  function setFilters(f: { repo?: string | null; feature?: string | null; agent?: string | null }) {
+  function setFilters(f: {
+    repo?: string | null
+    feature?: string | null
+    agent?: string | null
+    /** For a stream: everything its clones hold, not only the stream's own commits. */
+    repository?: boolean
+  }) {
     if (f.repo !== undefined) filterRepo.value = f.repo
     if (f.feature !== undefined) filterFeature.value = f.feature
     if (f.agent !== undefined) filterAgent.value = f.agent
+    if (f.repository !== undefined) wholeRepository.value = f.repository
     void loadCommits()
   }
 

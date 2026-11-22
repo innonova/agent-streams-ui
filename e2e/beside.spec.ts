@@ -377,3 +377,48 @@ test('a stream is put away once it has said what that does, and brought back fro
   await page.locator('[data-test=tree-stream]', { hasText: 'seasonal' }).getByText('keeper').click()
   await expect(page.getByTestId('agent-header')).toContainText('keeper')
 })
+
+test('a stream’s changes are its own commits; the repository’s history is asked for', async ({
+  page,
+}) => {
+  await login(page)
+  const s = await stream(page, 'own-work')
+  const id = await agent(page, s.id, 'maker')
+  // a repository with a history of its own, and a clone of it in the stream
+  const source = path.join(E2E_ROOT, 'own-work-source')
+  fs.rmSync(source, { recursive: true, force: true })
+  fs.mkdirSync(source, { recursive: true })
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], {
+      cwd,
+    })
+  git(source, 'init', '-q', '-b', 'main')
+  fs.writeFileSync(path.join(source, 'README.md'), '# shared\n')
+  git(source, 'add', '-A')
+  git(source, 'commit', '-qm', 'long before this stream')
+  await page.request.put('/api/repositories/shared', { data: { source } })
+  await page.request.post(`/api/projects/${s.id}/clones`, { data: { repository: 'shared' } })
+  const clone = path.join(s.path, 'shared')
+  await expect.poll(() => fs.existsSync(path.join(clone, 'README.md'))).toBe(true)
+  git(clone, 'checkout', '-q', '-b', 'own-work/first')
+  fs.writeFileSync(path.join(clone, 'new.txt'), 'x\n')
+  git(clone, 'add', '-A')
+  git(clone, 'commit', '-qm', 'what this stream did', '-m', 'Feature: own-work/first')
+
+  await page.goto(`./a/${id}`)
+  await page.getByTestId('beside-changes').click()
+  const panel = page.getByTestId('changes-panel')
+  // the stream's: its commit, with the feature it names, and not the repository's past
+  await page.getByTestId('changes-all').click()
+  await expect(page.getByTestId('changes-all')).toHaveText("the stream's")
+  await expect(panel.getByTestId('commit-row')).toHaveCount(1)
+  await expect(panel.getByTestId('commit-row')).toContainText('what this stream did')
+  await expect(panel.getByTestId('commit-row')).toContainText('first')
+  // the repository's: everything the clone holds
+  await page.getByTestId('changes-repository').click()
+  await expect(panel.getByTestId('commit-row')).toHaveCount(2)
+  await expect(panel.getByTestId('commit-row').nth(1)).toContainText('long before this stream')
+  expect(await pageOverflow(page)).toBe(0)
+  await page.getByTestId('changes-agent').click()
+  await page.getByTestId('beside-chat').click()
+})

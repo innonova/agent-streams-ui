@@ -138,7 +138,10 @@ of the screen; the chat's input comes and goes with the chat.
   a file's diff, carried over from the current UI's changes page and
   stacked when the pane is narrow. It opens on what the selected agent
   committed, with everyone's one click away, and a commit's "who"
-  scrolls the flow beside it to the moment the commit was made.
+  scrolls the flow beside it to the moment the commit was made. For a
+  stream "everyone's" is the stream's own commits (its clones are whole
+  repositories with everybody's history in them), and the repository's
+  history is a third choice, asked for each time and not remembered.
 - **Stream** (for a project of the older kind, "project"): what it is
   for, which is its instruction file rendered and editable in place,
   and its clones with the branch each is on, with a way to bring a
@@ -148,7 +151,6 @@ of the screen; the chat's input comes and goes with the chat.
 The chat takes at most half the width; what is read rather than talked
 in may take up to seven tenths, and all of it with the flow folded to
 its line.
-
 
 ## Carried over unchanged
 

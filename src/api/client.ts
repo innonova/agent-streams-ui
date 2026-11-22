@@ -377,9 +377,17 @@ export const api = {
     ),
   commits: (
     projectId: string,
-    opts: { repo?: string; feature?: string; agent?: string; limit?: number } = {},
+    opts: {
+      repo?: string
+      feature?: string
+      agent?: string
+      limit?: number
+      /** For a stream: `repository` for everything its clones hold; its own commits otherwise. */
+      scope?: 'repository'
+    } = {},
   ) => {
     const q = new URLSearchParams()
+    if (opts.scope) q.set('scope', opts.scope)
     if (opts.repo) q.set('repo', opts.repo)
     if (opts.feature) q.set('feature', opts.feature)
     if (opts.agent) q.set('agent', opts.agent)

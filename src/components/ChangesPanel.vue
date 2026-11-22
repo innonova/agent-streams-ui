@@ -59,12 +59,28 @@ const dividerAt = computed(() => {
 // Whose commits: the selected agent's, or everyone's in the stream. The
 // agent's is what one is here for; the choice is remembered.
 const WHOSE_KEY = 'changes-whose'
-const whose = ref<'agent' | 'all'>(localStorage.getItem(WHOSE_KEY) === 'all' ? 'all' : 'agent')
-function setWhose(w: 'agent' | 'all') {
+type Whose = 'agent' | 'all' | 'repository'
+const isStream = computed(() => projects.byId.get(props.projectId)?.project.kind === 'stream')
+// A stream's clones are whole repositories: "everyone's" there is the
+// stream's own commits, and the repository's history (other streams'
+// work, other people's) is a third thing, asked for and not remembered.
+const choices = computed<Whose[]>(() =>
+  isStream.value ? ['agent', 'all', 'repository'] : ['agent', 'all'],
+)
+const whose = ref<Whose>(localStorage.getItem(WHOSE_KEY) === 'all' ? 'all' : 'agent')
+function setWhose(w: Whose) {
   whose.value = w
-  localStorage.setItem(WHOSE_KEY, w)
+  if (w !== 'repository') localStorage.setItem(WHOSE_KEY, w)
   applyFilters()
 }
+const whoseLabel = (w: Whose) =>
+  w === 'agent'
+    ? "this agent's"
+    : w === 'repository'
+      ? "the repository's"
+      : isStream.value
+        ? "the stream's"
+        : "everyone's"
 const featureFilter = ref<string | null>(null)
 const repoFilter = ref<string | null>(null)
 function applyFilters() {
@@ -72,6 +88,7 @@ function applyFilters() {
     repo: repoFilter.value,
     feature: featureFilter.value,
     agent: whose.value === 'agent' ? props.agentId : null,
+    repository: whose.value === 'repository' && isStream.value,
   })
 }
 function setFilter(kind: 'repo' | 'feature', value: string | null) {
@@ -95,6 +112,9 @@ watch(
     if (id !== was) {
       featureFilter.value = null
       repoFilter.value = null
+      // the repository's history was asked for there, not here
+      if (whose.value === 'repository')
+        whose.value = localStorage.getItem(WHOSE_KEY) === 'all' ? 'all' : 'agent'
       await changes.select(id)
     }
     applyFilters()
@@ -167,7 +187,7 @@ const selectedFileTitle = computed(() => {
             data-test="changes-whose"
           >
             <button
-              v-for="w in ['agent', 'all'] as const"
+              v-for="w in choices"
               :key="w"
               type="button"
               class="px-2 py-0.5 not-first:border-l not-first:border-slate-300 dark:not-first:border-slate-700"
@@ -180,7 +200,7 @@ const selectedFileTitle = computed(() => {
               :data-test="`changes-${w}`"
               @click="setWhose(w)"
             >
-              {{ w === 'agent' ? "this agent's" : "everyone's" }}
+              {{ whoseLabel(w) }}
             </button>
           </div>
           <select
@@ -310,7 +330,9 @@ const selectedFileTitle = computed(() => {
             {{
               whose === 'agent'
                 ? 'No commits by this agent that the manager saw it make.'
-                : 'No commits.'
+                : whose === 'all' && isStream
+                  ? 'No commits of this stream yet: nothing on its branches that is not on main, nothing of its agents, nothing made for its features.'
+                  : 'No commits.'
             }}
           </p>
         </div>
