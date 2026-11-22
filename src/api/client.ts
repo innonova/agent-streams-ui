@@ -130,6 +130,13 @@ export const api = {
     },
   ) =>
     call<{ agent: Agent; status: AgentStatus }>('POST', `/api/projects/${projectId}/agents`, input),
+  /** A new agent that begins with this one's whole conversation, in the same project or stream or in another. */
+  fork: (id: string, input: { name: string; projectId?: string }) =>
+    call<{ agent: Agent; status: AgentStatus; inherited: number }>(
+      'POST',
+      `/api/agents/${id}/fork`,
+      input,
+    ),
   /** Edits the record; `appliesAtRestart` names the settings that wait for the next session start. */
   updateAgent: (
     id: string,

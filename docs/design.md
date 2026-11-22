@@ -162,8 +162,10 @@ deploys), who is logged in, the settings (theme, text size, desktop
 notifications, push), the way back to the current UI, and logging out.
 
 What is done to an agent is behind the "⋯" in its header: edit (one
-form for a new agent and an existing one), statistics, restart,
-compact, end session, archive, delete.
+form for a new agent and an existing one), statistics, fork (a new
+agent that begins with this one's whole conversation, here or in
+another stream: how work that grew out of a conversation gets a place
+of its own), restart, compact, end session, archive, delete.
 
 ## Served how
 

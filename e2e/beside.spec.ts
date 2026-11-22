@@ -177,3 +177,43 @@ test('a stream says what it is for and what it has cloned, beside its agent', as
   await expect(page.getByTestId('clone-pick')).toHaveCount(0) // nothing left to bring in
   await page.getByTestId('beside-chat').click()
 })
+
+test('an agent is forked into another stream with its conversation', async ({ page }) => {
+  await login(page)
+  const from = await stream(page, 'trunk')
+  const to = await stream(page, 'branch-off')
+  const id = await agent(page, from.id, 'elder')
+  await page.goto(`./a/${id}`)
+  await page.getByTestId('turn-input').fill('the logo is teal')
+  await page.getByTestId('turn-input').press('Control+Enter')
+  await expect(page.getByTestId('flow-pane')).toContainText('You said: the logo is teal')
+
+  // before the vendor has written the conversation down there is nothing to copy, and the form says so
+  await page.getByTestId('agent-menu').click()
+  await page.getByTestId('agent-fork').click()
+  await page.getByTestId('fork-name').fill('younger')
+  await page.getByTestId('fork-into').selectOption(to.id)
+  await page.getByTestId('form-submit').click()
+  await expect(page.getByTestId('form-error')).toContainText('no conversation to copy yet')
+
+  // the vendor's file, as the test plays it; then the fork is made and is where the screen goes
+  const row = (await (await page.request.get(`/api/agents/${id}`)).json()) as {
+    agent: { vendorConversationId: string }
+  }
+  const dir = path.join(E2E_ROOT, 'vendor', path.basename(from.path))
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, `${row.agent.vendorConversationId}.jsonl`), 'so far\n')
+  await page.getByTestId('form-submit').click()
+  await expect(page.getByTestId('agent-title')).toHaveText(/branch-off\s*›\s*younger/)
+  await expect(page).not.toHaveURL(new RegExp(id))
+  await expect(page.getByTestId('flow-pane')).toContainText('forked from trunk/elder')
+  // both are in the tree, each in its own stream
+  await expect(
+    page.locator('[data-test=tree-stream]', { hasText: 'branch-off' }).getByTestId('agent-row'),
+  ).toContainText('younger')
+  await page.getByTestId('turn-input').fill('whence')
+  await page.getByTestId('turn-input').press('Control+Enter')
+  await expect(page.getByTestId('flow-pane')).toContainText(
+    `Forked from ${row.agent.vendorConversationId}.`,
+  )
+})

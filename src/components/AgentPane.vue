@@ -19,6 +19,7 @@ import AgentStatsDialog from './AgentStatsDialog.vue'
 import ChatPane from './ChatPane.vue'
 import FeaturesPanel from './FeaturesPanel.vue'
 import FlowStrip from './FlowStrip.vue'
+import ModalForm from './ModalForm.vue'
 import NotesPanel from './NotesPanel.vue'
 import StreamPanel from './StreamPanel.vue'
 import NudgeNotice from './NudgeNotice.vue'
@@ -479,6 +480,35 @@ watch(menu, (open) => {
 })
 onUnmounted(() => document.removeEventListener('click', closeMenu, true))
 const editing = ref(false)
+/**
+ * Forking: a new agent, here or in another stream, that begins with
+ * this one's whole conversation. How work that grew out of a
+ * conversation gets a place of its own without being explained from
+ * nothing to an agent that knows nothing.
+ */
+const forking = ref<{ name: string; into: string } | null>(null)
+const forkError = ref<string | null>(null)
+const forkBusy = ref(false)
+function startFork() {
+  menu.value = false
+  forkError.value = null
+  forking.value = { name: '', into: current.value?.agent.projectId ?? '' }
+}
+async function fork() {
+  const f = forking.value
+  if (!f) return
+  forkBusy.value = true
+  forkError.value = null
+  try {
+    const made = await api.fork(props.agentId, { name: f.name.trim(), projectId: f.into })
+    forking.value = null
+    await router.push({ name: 'agent', params: { agentId: made.agent.id } })
+  } catch (e) {
+    forkError.value = e instanceof ApiError ? e.message : String(e)
+  } finally {
+    forkBusy.value = false
+  }
+}
 /** The agent's statistics, fetched when asked for: reading a long transcript takes a moment. */
 const stats = ref<{ data: AgentStats | null; error: string | null } | null>(null)
 let statsAsked = 0
@@ -652,7 +682,7 @@ const busy = computed(() => {
           class="rounded border border-slate-300 px-2 py-0.5 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           aria-haspopup="menu"
           :aria-expanded="menu"
-          title="edit, statistics, restart, compact, end the session, archive, delete"
+          title="edit, statistics, fork, restart, compact, end the session, archive, delete"
           data-test="agent-menu"
           @click="menu = !menu"
         >
@@ -686,6 +716,19 @@ const busy = computed(() => {
             statistics…
             <span class="block text-xs text-slate-500 dark:text-slate-400"
               >runtime, tokens and cost, how much went on unattended</span
+            >
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="block w-full px-3 py-1.5 text-left hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-800"
+            :disabled="busy"
+            data-test="agent-fork"
+            @click="startFork"
+          >
+            fork…
+            <span class="block text-xs text-slate-500 dark:text-slate-400"
+              >a new agent that begins with this whole conversation, here or in another stream</span
             >
           </button>
           <div class="my-1 border-t border-slate-200 dark:border-slate-700" />
@@ -1035,6 +1078,44 @@ const busy = computed(() => {
       @close="editing = false"
       @done="editing = false"
     />
+    <ModalForm
+      v-if="forking"
+      :title="`Fork ${current.agent.name}`"
+      :error="forkError"
+      :busy="forkBusy"
+      submit-label="fork"
+      @close="forking = null"
+      @submit="fork"
+    >
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        A new agent that begins with this conversation as it stands, everything said and done in it.
+        {{ current.agent.name }} carries on untouched; from the fork on, neither sees what the other
+        does. The new one is told it is a copy, and where it now is.
+      </p>
+      <label class="text-base">
+        <span class="text-slate-600 dark:text-slate-300">Its name</span>
+        <input
+          v-model="forking.name"
+          required
+          autofocus
+          class="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+          data-test="fork-name"
+        />
+      </label>
+      <label class="text-base">
+        <span class="text-slate-600 dark:text-slate-300">Where it works</span>
+        <select
+          v-model="forking.into"
+          class="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800"
+          data-test="fork-into"
+        >
+          <option v-for="r in projects.rows" :key="r.project.id" :value="r.project.id">
+            {{ r.project.name }}{{ r.project.kind === 'stream' ? ' (stream)' : ''
+            }}{{ r.project.id === current.agent.projectId ? ' — where it is now' : '' }}
+          </option>
+        </select>
+      </label>
+    </ModalForm>
     <AgentStatsDialog
       v-if="stats"
       :name="current.agent.name"
