@@ -16,6 +16,7 @@ import { useProjectsStore } from '@/stores/projects'
 import ActivityLine from './ActivityLine.vue'
 import AgentForm from './AgentForm.vue'
 import AgentStatsDialog from './AgentStatsDialog.vue'
+import ChangesPanel from './ChangesPanel.vue'
 import ChatPane from './ChatPane.vue'
 import FeaturesPanel from './FeaturesPanel.vue'
 import FilesPanel from './FilesPanel.vue'
@@ -106,7 +107,7 @@ function setLayout(l: Layout) {
   localStorage.setItem(LAYOUT_KEY, l)
 }
 /** What is in the pane beside the flow: the chat, or something of the agent's stream. */
-const BESIDE = ['chat', 'features', 'notes', 'files', 'stream'] as const
+const BESIDE = ['chat', 'features', 'notes', 'files', 'changes', 'stream'] as const
 type Beside = (typeof BESIDE)[number]
 const BESIDE_KEY = 'agent-beside'
 const beside = ref<Beside>(
@@ -806,7 +807,7 @@ const busy = computed(() => {
       data-test="pane-tabs"
     >
       <button
-        v-for="t in ['chat', 'flow', 'features', 'notes', 'files', 'stream'] as const"
+        v-for="t in ['chat', 'flow', 'features', 'notes', 'files', 'changes', 'stream'] as const"
         :key="t"
         type="button"
         class="grow border-b-2 px-2 py-2"
@@ -952,6 +953,11 @@ const busy = computed(() => {
         <NotesPanel v-else-if="beside === 'notes'" :project-id="current.agent.projectId" />
         <FilesPanel
           v-else-if="beside === 'files'"
+          :project-id="current.agent.projectId"
+          :agent-id="agentId"
+        />
+        <ChangesPanel
+          v-else-if="beside === 'changes'"
           :project-id="current.agent.projectId"
           :agent-id="agentId"
         />

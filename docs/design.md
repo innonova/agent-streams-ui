@@ -120,6 +120,11 @@ of the screen; the chat's input comes and goes with the chat.
   the address (`?file=`). An upload can be mentioned to the agent the
   panel is beside: the words land in that agent's input. A Markdown
   file opens rendered, its frontmatter shown as fields.
+- **Changes**: the commits in the stream's clones, a commit's files,
+  a file's diff, carried over from the current UI's changes page and
+  stacked when the pane is narrow. It opens on what the selected agent
+  committed, with everyone's one click away, and a commit's "who"
+  scrolls the flow beside it to the moment the commit was made.
 - **Stream** (for a project of the older kind, "project"): what it is
   for, which is its instruction file rendered and editable in place,
   and its clones with the branch each is on, with a way to bring a
@@ -130,7 +135,6 @@ The chat takes at most half the width; what is read rather than talked
 in may take up to seven tenths, and all of it with the flow folded to
 its line.
 
-Changes are not there yet; when they come, this is where.
 
 ## Carried over unchanged
 
@@ -175,7 +179,6 @@ Each of these exists in the current UI and is reached there (the
 "current UI" link under the tree, and two links in the settings) until
 it has been considered here:
 
-- changes (the commits and their diffs);
 - what of a stream's clones is not yet landed on main;
 - an agent's harness note, account usage;
 - users, machines, the harness, models, method and framing texts, the

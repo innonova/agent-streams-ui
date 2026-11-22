@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
-import { E2E_ROOT } from './constants'
+import { E2E_ROOT, PROJECT_DIR } from './constants'
 import { agent, login, pageOverflow, stream } from './helpers'
 
 /**
@@ -277,4 +277,45 @@ test('the files of a stream are read beside the agent, and an upload is mentione
   // put away, the file leaves the address with it
   await page.getByTestId('beside-chat').click()
   await expect(page).not.toHaveURL(/file=/)
+})
+
+test('what changed is read beside the agent: its own commits first, everyone’s one click away', async ({
+  page,
+}) => {
+  await login(page)
+  // a project of the older kind on a repository with a commit and uncommitted work in it
+  const all = (await (await page.request.get('/api/projects')).json()) as {
+    project: { id: string; name: string }
+  }[]
+  const found = all.find((p) => p.project.name === 'with-history')
+  const projectId =
+    found?.project.id ??
+    (
+      (await (
+        await page.request.post('/api/projects', {
+          data: { name: 'with-history', repos: [{ path: PROJECT_DIR }], defaultProfile: 'fake' },
+        })
+      ).json()) as { project: { id: string } }
+    ).project.id
+  const id = await agent(page, projectId, `reader-${Date.now()}`)
+  await page.goto(`./a/${id}`)
+  await page.getByTestId('beside-changes').click()
+  const panel = page.getByTestId('changes-panel')
+  // it opens on what this agent committed, which is nothing
+  await expect(page.getByTestId('changes-agent')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('commits-empty')).toContainText('No commits by this agent')
+  // everyone's: the repository's commit, and the work not committed yet
+  await page.getByTestId('changes-all').click()
+  await expect(panel.getByTestId('commit-row')).toContainText('init')
+  await expect(panel.getByTestId('working-row')).toContainText('working tree')
+  await panel.getByTestId('commit-row').first().click()
+  await expect(panel.getByTestId('commit-file').first()).toBeVisible()
+  await panel.getByTestId('commit-file').first().click()
+  await expect(panel.getByTestId('diff-path')).not.toHaveText('select a commit, then a file')
+  // still beside the agent, and nothing spills off the screen
+  await expect(page.getByTestId('agent-title')).toHaveText(/with-history\s*›\s*reader-/)
+  await expect(page.getByTestId('turn-input')).toBeVisible()
+  expect(await pageOverflow(page)).toBe(0)
+  await page.getByTestId('changes-agent').click()
+  await page.getByTestId('beside-chat').click()
 })
