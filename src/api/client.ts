@@ -78,7 +78,7 @@ export const api = {
   archivePlan: (projectId: string) =>
     call<{ plan: ArchivePlan }>('GET', `/api/projects/${projectId}/archive/plan`),
   /** Puts a stream away; answers at once, and `project.archive` frames say how far it is. */
-  archiveStream: (projectId: string, input: { discard?: boolean; compact?: boolean }) =>
+  archiveStream: (projectId: string, input: { discard?: boolean | string; compact?: boolean }) =>
     call<{ project: Project }>('POST', `/api/projects/${projectId}/archive`, input),
   /** Brings a stream back; answers at once. */
   reviveStream: (projectId: string) =>

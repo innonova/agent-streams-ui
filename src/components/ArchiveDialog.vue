@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ApiError, api } from '@/api/client'
 import type { ArchivePlan, Project } from '@/api/types'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useProjectsStore } from '@/stores/projects'
 import ModalForm from './ModalForm.vue'
 
@@ -16,6 +17,7 @@ import ModalForm from './ModalForm.vue'
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ close: []; done: [] }>()
 const projects = useProjectsStore()
+const notifications = useNotificationsStore()
 
 const plan = ref<ArchivePlan | null>(null)
 const error = ref<string | null>(null)
@@ -59,7 +61,11 @@ async function submit() {
   asked = true
   begun = false
   try {
-    await projects.putAway(props.project.id, { discard: discard.value, compact: compact.value })
+    // what is let go is what was shown: anything else found uncommitted by then refuses the request
+    await projects.putAway(props.project.id, {
+      discard: discard.value && plan.value ? plan.value.uncommittedKey : false,
+      compact: compact.value,
+    })
     going.value = true
     follow()
   } catch (e) {
@@ -78,7 +84,11 @@ function follow() {
   const m = moving.value
   if (!asked || !m) return
   if (m.archive?.state === 'archiving') begun = true
-  if (m.archive?.state === 'archived' && !m.progress.step) return emit('done')
+  if (m.archive?.state === 'archived' && !m.progress.step) {
+    // away, though something may be left on the disk: said, and done
+    if (m.progress.error) notifications.push('error', m.progress.error)
+    return emit('done')
+  }
   if (begun && m.progress.error) {
     asked = false
     going.value = false
@@ -189,11 +199,6 @@ watch(moving, follow)
           (takes minutes)
         </label>
       </div>
-
-      <p v-if="plan.unreachable.length" class="text-sm text-amber-700 dark:text-amber-300">
-        The remote of {{ plan.unreachable.join(', ') }} could not be asked; judged by what the clone
-        last knew.
-      </p>
     </template>
   </ModalForm>
 </template>

@@ -70,10 +70,10 @@ export interface ArchivePlan {
   blocked: string[]
   /** Work that is not committed and would go with the clones: gone only on a person's word. */
   uncommitted: { clone: string; count: number; files: string[]; stashes: number }[]
-  /** Branches with commits no remote has, pushed first. */
+  /** What `uncommitted` stood for when it was looked at: sent back as `discard`, it lets go of exactly what was shown. */
+  uncommittedKey: string
+  /** Branches with commits the remote has on no branch, pushed first. */
   pushes: { clone: string; branch: string; commits: number }[]
-  /** Clones whose remote could not be asked. */
-  unreachable: string[]
   clones: { name: string; branch: string | null; head: string | null; sizeKb: number }[]
   agents: { id: string; name: string; state: string; compact: boolean; why: string }[]
   reclaimKb: number

@@ -99,7 +99,7 @@ export const useProjectsStore = defineStore('projects', () => {
   }
 
   /** Puts a stream away; refused with the reasons when something stands in the way. The frames say how it goes. */
-  async function putAway(id: string, input: { discard?: boolean; compact?: boolean }) {
+  async function putAway(id: string, input: { discard?: boolean | string; compact?: boolean }) {
     const { project } = await api.archiveStream(id, input)
     const row = byId.value.get(id)
     if (row) row.project.archive = project.archive
